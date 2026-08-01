@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectBundle } from '../../core/project'
-import { buildPreviewDocument } from './buildPreviewDocument'
+import { buildPreviewDocument, collectPreviewElementIds } from './buildPreviewDocument'
 
 const encoder = new TextEncoder()
 
@@ -65,5 +65,27 @@ describe('buildPreviewDocument', () => {
 
     expect(preview).toContain('data:image/png;base64,AQID')
     expect(bundle.files[1].bytes).toBe(originalImage)
+  })
+
+  it('exposes the same stable identifiers used by the visual selector', () => {
+    const bundle: ProjectBundle = {
+      manifest: {
+        version: 1,
+        name: 'Selection fixture',
+        startPage: 'home',
+        pages: [{ id: 'home', name: 'Home', file: 'pages/home.html' }],
+        connections: [],
+      },
+      files: [{
+        path: 'pages/home.html',
+        mediaType: 'text/html',
+        bytes: encoder.encode('<html><body><main><button>Continue</button></main></body></html>'),
+      }],
+    }
+
+    expect(collectPreviewElementIds(bundle, bundle.manifest.pages[0])).toEqual(new Set([
+      'home::main:1',
+      'home::main:1/button:1',
+    ]))
   })
 })

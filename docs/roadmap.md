@@ -12,7 +12,7 @@
 - [x] Pruebas del esquema.
 - [x] Documentación de arquitectura.
 - [x] Workflow de CI y comprobación de límites modulares.
-- [ ] Confirmar la primera ejecución de CI después del push.
+- [x] Confirmar la primera ejecución de CI después del push.
 
 ## Hito 1 — Importación
 
@@ -26,11 +26,11 @@
 
 ## Hito 2 — Navegación visual
 
-- [ ] Seleccionar elementos del HTML.
-- [ ] Asignar identificadores estables.
-- [ ] Configurar navegar, regresar y abrir URL.
-- [ ] Guardar conexiones sin modificar CSS.
-- [ ] Mostrar advertencias por conexiones rotas.
+- [x] Seleccionar elementos del HTML.
+- [x] Asignar identificadores estables.
+- [x] Configurar navegar, regresar y abrir URL.
+- [x] Guardar conexiones sin modificar CSS.
+- [x] Mostrar advertencias por conexiones rotas.
 
 ## Hito 3 — Prueba y exportación
 

@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import type { ProjectBundle, ProjectFile, ProjectPage } from '../../core/project'
+import { assignStableElementIds } from './element-identifiers'
 
 const textDecoder = new TextDecoder()
 
@@ -114,6 +115,8 @@ export function buildPreviewDocument(bundle: ProjectBundle, page: ProjectPage) {
     anchor.setAttribute('href', '#')
   })
 
+  assignStableElementIds(document, page.id)
+
   const styles = bundle.files
     .filter((file) => file.mediaType === 'text/css' || file.path.endsWith('.css'))
     .sort((left, right) => left.path.localeCompare(right.path))
@@ -122,7 +125,15 @@ export function buildPreviewDocument(bundle: ProjectBundle, page: ProjectPage) {
 
   const previewSafetyStyles = `
     html { min-height: 100%; }
-    a, button, [role="button"] { cursor: default !important; }
+    [data-builder-element-id] { cursor: crosshair !important; }
+    [data-builder-element-id]:hover {
+      outline: 2px dashed #168f86 !important;
+      outline-offset: 2px !important;
+    }
+    [data-builder-selected="true"] {
+      outline: 3px solid #168f86 !important;
+      outline-offset: 2px !important;
+    }
   `
   const style = document.createElement('style')
   style.dataset.builderPreview = 'true'
@@ -130,4 +141,14 @@ export function buildPreviewDocument(bundle: ProjectBundle, page: ProjectPage) {
   document.head.append(style)
 
   return `<!doctype html>\n${document.documentElement.outerHTML}`
+}
+
+export function collectPreviewElementIds(bundle: ProjectBundle, page: ProjectPage) {
+  const preview = buildPreviewDocument(bundle, page)
+  const document = new DOMParser().parseFromString(preview, 'text/html')
+
+  return new Set(
+    [...document.querySelectorAll<HTMLElement>('[data-builder-element-id]')]
+      .flatMap((element) => element.dataset.builderElementId ?? []),
+  )
 }

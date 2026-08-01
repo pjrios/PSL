@@ -6,7 +6,7 @@ autenticación con Supabase, componentes MediaPipe y exportación para Cloudflar
 
 ## Estado
 
-El repositorio completó localmente el **Hito 1 — Importación modular**. Incluye:
+El repositorio completó localmente el **Hito 2 — Navegación visual**. Incluye:
 
 - Shell visual del editor.
 - Tres pantallas responsive de demostración.
@@ -16,8 +16,13 @@ El repositorio completó localmente el **Hito 1 — Importación modular**. Incl
 - Importación de proyectos ZIP completamente en el navegador.
 - Creación automática de `project.json` cuando no esté presente.
 - Vista previa segura de HTML/CSS y assets locales.
+- Selección visual de elementos sin modificar los archivos importados.
+- Acciones para navegar, regresar y abrir una URL.
+- Conexiones editables almacenadas en `project.json`.
+- Advertencias para conexiones cuyos elementos desaparecieron.
 
-Las conexiones visuales todavía no están habilitadas; corresponden al Hito 2.
+La ejecución real de las conexiones y la descarga del proyecto corresponden al
+Hito 3.
 
 ## Ejecutar localmente
 
@@ -53,7 +58,7 @@ src/
 │   ├── importer/        Entrada ZIP
 │   ├── page-catalog/    Lista de pantallas
 │   ├── preview/         Vista segura y responsive
-│   ├── navigation/      Conexiones visuales
+│   ├── navigation/      Edición y validación de conexiones visuales
 │   └── exporter/        Salida ZIP
 └── runtime/             Código para la aplicación exportada
 ```
@@ -82,11 +87,14 @@ en `pages/`. Los archivos importados no se modifican durante la vista previa.
 
 ## Alcance actual
 
-La meta inmediata es completar esta secuencia:
+El flujo de edición disponible es:
 
 ```text
 Importar → seleccionar → conectar → probar → exportar
 ```
+
+Actualmente están disponibles los tres primeros pasos. Probar y exportar se
+implementarán en el Hito 3.
 
 Supabase y MediaPipe permanecerán fuera del núcleo de navegación y se añadirán
 como módulos independientes después de validar este flujo.
