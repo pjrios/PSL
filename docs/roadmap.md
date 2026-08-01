@@ -34,11 +34,11 @@
 
 ## Hito 3 — Prueba y exportación
 
-- [ ] Alternar entre Editar y Probar.
-- [ ] Ejecutar navegación real en la vista previa.
-- [ ] Generar runtime de navegación independiente.
-- [ ] Exportar ZIP estático.
-- [ ] Reimportar sin perder conexiones.
+- [x] Alternar entre Editar y Probar.
+- [x] Ejecutar navegación real en la vista previa.
+- [x] Generar runtime de navegación independiente.
+- [x] Exportar ZIP estático.
+- [x] Reimportar sin perder conexiones.
 
 ## Hito 4 — Robustez responsive
 

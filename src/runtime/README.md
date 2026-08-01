@@ -4,4 +4,6 @@ Este directorio alojará código pequeño e independiente que se insertará en l
 sitios exportados. El runtime no puede importar React, GrapesJS ni componentes
 del editor.
 
-El primer archivo funcional será `navigation-runtime.ts` en el Hito 3.
+`navigation-runtime.ts` contiene el runtime de navegación del Hito 3. El mismo
+código funciona con dos transportes: mensajes hacia el editor durante las
+pruebas y navegación real mediante `location` dentro del ZIP exportado.

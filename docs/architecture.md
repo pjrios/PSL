@@ -78,14 +78,16 @@ importar desde `modules` ni `app`.
 
 ### `modules/exporter`
 
-- Recibirá un `ProjectBundle`.
-- Generará un ZIP estático desplegable.
-- Su API pública inicial es `ProjectExporter`.
+- Recibe un `ProjectBundle` sin modificarlo.
+- Genera un ZIP estático con manifiesto actualizado, página de entrada y runtime.
+- Inyecta configuración por pantalla únicamente en las copias exportadas.
+- Expone `ProjectExporter` como puerto y `ZipProjectExporter` como adaptador.
 
 ### `runtime`
 
-- Contendrá JavaScript mínimo para los proyectos exportados.
-- No conoce la interfaz del editor.
+- Contiene JavaScript mínimo de navegación y no conoce la interfaz del editor.
+- Usa mensajes en el modo Probar y URLs relativas dentro del ZIP.
+- Es el mismo código en ambos contextos, evitando comportamientos divergentes.
 
 ## Módulos futuros
 
@@ -111,6 +113,10 @@ project.zip
 
 La versión del manifiesto se valida explícitamente. Un cambio incompatible
 requerirá una nueva versión y una migración, no una reinterpretación silenciosa.
+
+El exportador reserva `index.html` y `psl-runtime/navigation.js` para la página
+de entrada y el runtime generado. Los HTML importados solo se transforman en la
+copia exportada; el `ProjectBundle` conserva sus bytes originales.
 
 ## Decisión sobre el canvas
 
