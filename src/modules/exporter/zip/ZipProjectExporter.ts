@@ -83,13 +83,15 @@ export class ZipProjectExporter implements ProjectExporter {
     const pagesByFile = new Map(bundle.manifest.pages.map((page) => [page.file, page]))
 
     for (const file of bundle.files) {
-      if (file.path === 'project.json' || file.path === runtimePath || file.path === 'index.html') {
+      if (file.path === 'project.json' || file.path === runtimePath) {
         continue
       }
 
       const page = pagesByFile.get(file.path)
       if (page) {
         archive.file(file.path, injectNavigationRuntime(textDecoder.decode(file.bytes), bundle, page))
+      } else if (file.path === 'index.html') {
+        continue
       } else {
         archive.file(file.path, bytesToBase64(file.bytes), { base64: true })
       }
@@ -97,7 +99,9 @@ export class ZipProjectExporter implements ProjectExporter {
 
     archive.file('project.json', JSON.stringify(bundle.manifest, null, 2))
     archive.file(runtimePath, createNavigationRuntimeSource())
-    archive.file('index.html', startPageDocument(bundle))
+    if (!pagesByFile.has('index.html')) {
+      archive.file('index.html', startPageDocument(bundle))
+    }
 
     const bytes = await archive.generateAsync({ type: 'uint8array' })
     return new Blob([bytes.buffer as ArrayBuffer], { type: 'application/zip' })

@@ -36,8 +36,8 @@ export function PageCatalog({ activePageId, onPageSelect, project }: PageCatalog
       </nav>
 
       <div className="milestone-note">
-        <strong>Próximo: Hito 4</strong>
-        <p>Validar diseños responsive reales y su publicación estática.</p>
+        <strong>Hito 4 · Validación responsive</strong>
+        <p>Conserva CSS, fuentes y assets antes de publicar el ZIP.</p>
       </div>
     </aside>
   )

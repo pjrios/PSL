@@ -6,7 +6,8 @@ autenticación con Supabase, componentes MediaPipe y exportación para Cloudflar
 
 ## Estado
 
-El repositorio completó localmente el **Hito 3 — Prueba y exportación**. Incluye:
+El repositorio completó la validación local principal del **Hito 4 — Robustez
+responsive**. Incluye:
 
 - Shell visual del editor.
 - Tres pantallas responsive de demostración.
@@ -25,9 +26,14 @@ El repositorio completó localmente el **Hito 3 — Prueba y exportación**. Inc
 - Exportación ZIP con una entrada `index.html` para hosting estático.
 - Runtime independiente compartido por la prueba y la exportación.
 - Reimportación sin pérdida ni duplicación de conexiones.
+- Importación de HTML ubicado en la raíz o en carpetas anidadas.
+- Preservación de stylesheets enlazados, media queries, fuentes y assets.
+- Validación de rutas estáticas sensible a mayúsculas antes de descargar.
+- Prueba integral del flujo completo con un fixture compatible con FigmaToCode.
 
-El siguiente hito probará exportaciones reales de FigmaToCode y reforzará la
-compatibilidad responsive antes de integrar servicios externos.
+Para cerrar la aceptación externa del Hito 4 falta probar un ZIP producido
+desde un diseño real del equipo y verificar el resultado en una URL de
+Cloudflare Pages.
 
 ## Ejecutar localmente
 
@@ -74,21 +80,23 @@ módulos y [docs/roadmap.md](docs/roadmap.md) para el progreso.
 ## Proyecto de ejemplo
 
 `examples/three-screen-demo` contiene Inicio, Catálogo y Práctica junto con CSS
-responsive y un manifiesto válido. Este fixture será la primera entrada del
-importador ZIP.
+responsive y un manifiesto válido. `examples/figma-responsive-export` reproduce
+una salida de diseño con HTML en la raíz, CSS enlazado, fuente, SVG y media
+queries.
 
 Los proyectos importados deben seguir inicialmente esta estructura:
 
 ```text
 project.zip
-├── pages/*.html
+├── **/*.html
 ├── styles/*.css
 ├── assets/**
 └── project.json       opcional
 ```
 
 Si no existe `project.json`, el importador crea uno usando los HTML encontrados
-en `pages/`. Los archivos importados no se modifican durante la vista previa.
+en cualquier carpeta segura. Los archivos importados no se modifican durante
+la vista previa.
 
 ## Alcance actual
 
@@ -100,6 +108,9 @@ Importar → seleccionar → conectar → probar → exportar
 
 Los cinco pasos están disponibles. El ZIP resultante incluye una página de
 entrada y puede servirse como un sitio estático.
+
+La guía de publicación manual está en
+[docs/cloudflare-pages.md](docs/cloudflare-pages.md).
 
 Supabase y MediaPipe permanecerán fuera del núcleo de navegación y se añadirán
 como módulos independientes después de validar este flujo.

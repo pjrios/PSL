@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ProjectBundle } from '../../../core/project'
+import { validateStaticArchive } from '../validation/validateStaticArchive'
 import { zipProjectExporter } from '../zip/ZipProjectExporter'
 
 interface ExportProjectButtonProps {
@@ -28,6 +29,10 @@ export function ExportProjectButton({ bundle, disabled }: ExportProjectButtonPro
 
     try {
       const blob = await zipProjectExporter.export(bundle)
+      const validation = await validateStaticArchive(blob)
+      if (!validation.valid) {
+        throw new Error(`La exportación no está lista para hosting: ${validation.errors[0]}`)
+      }
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url

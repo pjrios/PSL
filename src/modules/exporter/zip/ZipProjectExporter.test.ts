@@ -73,4 +73,29 @@ describe('ZipProjectExporter', () => {
     expect(home.match(/data-psl-config=/g)).toHaveLength(1)
     expect(home.match(/data-psl-runtime=/g)).toHaveLength(1)
   })
+
+  it('uses an imported root index page instead of overwriting it with a redirect', async () => {
+    const rootBundle: ProjectBundle = {
+      manifest: {
+        version: 1,
+        name: 'Root page fixture',
+        startPage: 'index',
+        pages: [{ id: 'index', name: 'Home', file: 'index.html' }],
+        connections: [],
+      },
+      files: [{
+        path: 'index.html',
+        mediaType: 'text/html',
+        bytes: encoder.encode('<html><body><main>Figma home</main></body></html>'),
+      }],
+    }
+    const archive = await JSZip.loadAsync(
+      await (await new ZipProjectExporter().export(rootBundle)).arrayBuffer(),
+    )
+    const index = await archive.file('index.html')!.async('string')
+
+    expect(index).toContain('Figma home')
+    expect(index).toContain('src="psl-runtime/navigation.js"')
+    expect(index).not.toContain('window.location.replace')
+  })
 })

@@ -44,6 +44,22 @@ describe('ZipProjectImporter', () => {
     expect(bundle.manifest.pages).toHaveLength(2)
   })
 
+  it('discovers root and nested HTML from a design export', async () => {
+    const bundle = await importer.import(
+      await archiveBlob({
+        'index.html': '<!doctype html><html><body>Home</body></html>',
+        'screens/practice.html': '<!doctype html><html><body>Practice</body></html>',
+        'styles/site.css': 'body { display: flex; }',
+      }),
+    )
+
+    expect(bundle.manifest.startPage).toBe('index')
+    expect(bundle.manifest.pages.map((page) => page.file)).toEqual([
+      'index.html',
+      'screens/practice.html',
+    ])
+  })
+
   it('rejects a manifest that references a missing page', async () => {
     const source = await archiveBlob({
       'project.json': JSON.stringify({

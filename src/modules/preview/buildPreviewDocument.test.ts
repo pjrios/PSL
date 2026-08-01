@@ -67,6 +67,42 @@ describe('buildPreviewDocument', () => {
     expect(bundle.files[1].bytes).toBe(originalImage)
   })
 
+  it('preserves linked stylesheet order, media queries, fonts, and inline assets', () => {
+    const bundle: ProjectBundle = {
+      manifest: {
+        version: 1,
+        name: 'Responsive design export',
+        startPage: 'home',
+        pages: [{ id: 'home', name: 'Home', file: 'index.html' }],
+        connections: [],
+      },
+      files: [
+        {
+          path: 'index.html',
+          mediaType: 'text/html',
+          bytes: encoder.encode('<html><head><link rel="stylesheet" href="styles/app.css" media="screen"><style>.logo { background: url("assets/logo.svg") }</style></head><body><main>Home</main></body></html>'),
+        },
+        {
+          path: 'styles/app.css',
+          mediaType: 'text/css',
+          bytes: encoder.encode('@font-face { font-family: Figma; src: url("../assets/figma.woff2") } @media (max-width: 640px) { main { display: block } }'),
+        },
+        { path: 'assets/logo.svg', mediaType: 'image/svg+xml', bytes: encoder.encode('<svg/>') },
+        { path: 'assets/figma.woff2', mediaType: 'font/woff2', bytes: new Uint8Array([1, 2, 3]) },
+        { path: 'styles/unrelated.css', mediaType: 'text/css', bytes: encoder.encode('.should-not-load {}') },
+      ],
+    }
+
+    const preview = buildPreviewDocument(bundle, bundle.manifest.pages[0])
+
+    expect(preview).toContain('data-builder-stylesheet="styles/app.css"')
+    expect(preview).toContain('media="screen"')
+    expect(preview).toContain('@media (max-width: 640px)')
+    expect(preview).toContain('data:font/woff2;base64,AQID')
+    expect(preview).toContain('data:image/svg+xml;base64,PHN2Zy8+')
+    expect(preview).not.toContain('.should-not-load')
+  })
+
   it('exposes the same stable identifiers used by the visual selector', () => {
     const bundle: ProjectBundle = {
       manifest: {

@@ -1,0 +1,44 @@
+@font-face {
+  font-family: "PSL Fixture";
+  src: url("../assets/psl-fixture.woff2") format("woff2");
+  font-display: swap;
+}
+
+:root {
+  font-family: "PSL Fixture", Inter, sans-serif;
+  color: #123d47;
+  background: #eff9f7;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+.screen {
+  width: min(1120px, calc(100% - 48px));
+  min-height: 100vh;
+  margin: auto;
+  padding: 72px 0;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  align-items: center;
+  gap: 72px;
+}
+
+.eyebrow { color: #168f86; font-weight: 800; }
+h1 { max-width: 620px; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: 0.95; }
+p { max-width: 560px; color: #527078; font-size: 1.1rem; line-height: 1.6; }
+.hero-art { width: 100%; max-height: 520px; }
+.primary-action, .secondary-action { padding: 14px 20px; border: 0; border-radius: 12px; }
+.primary-action { color: #083b42; background: #78ded2; }
+.secondary-action { color: #fff; background: #123d47; }
+.camera { min-height: 360px; display: grid; place-items: center; background: #d9efeb; border-radius: 24px; }
+
+@media (max-width: 760px) {
+  .screen { width: min(100% - 32px, 560px); padding: 40px 0; }
+  .hero { grid-template-columns: 1fr; gap: 32px; }
+  .hero-art { order: -1; max-height: 260px; }
+  .primary-action, .secondary-action { width: 100%; }
+}

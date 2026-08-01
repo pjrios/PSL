@@ -53,6 +53,8 @@ importar desde `modules` ni `app`.
 - Recibirá un `Blob` ZIP.
 - Devuelve un `ProjectBundle` validado.
 - Genera un manifiesto versión 1 si el ZIP no contiene `project.json`.
+- Descubre HTML en la raíz o en carpetas anidadas para aceptar salidas de
+  herramientas de diseño sin obligarlas a usar `pages/`.
 - Conserva todos los archivos originales en memoria.
 - Su API pública es `ProjectImporter`; `ZipProjectImporter` es un adaptador.
 
@@ -67,6 +69,8 @@ importar desde `modules` ni `app`.
 - Permite comprobar escritorio, tableta y móvil.
 - Genera copias seguras para preview: elimina scripts, bloquea navegación e
   incorpora assets locales como data URLs.
+- Conserva el orden de stylesheets enlazados, sus atributos `media`, fuentes y
+  assets; solo usa todos los CSS como fallback para proyectos sin enlaces.
 - Nunca modifica el `ProjectBundle` importado.
 - No guarda navegación.
 
@@ -82,6 +86,8 @@ importar desde `modules` ni `app`.
 - Genera un ZIP estático con manifiesto actualizado, página de entrada y runtime.
 - Inyecta configuración por pantalla únicamente en las copias exportadas.
 - Expone `ProjectExporter` como puerto y `ZipProjectExporter` como adaptador.
+- Valida el ZIP final como un árbol estático sensible a mayúsculas antes de la
+  descarga, sin acoplarse a la API de Cloudflare.
 
 ### `runtime`
 
@@ -105,7 +111,7 @@ Estos módulos consumirán `core/project`, pero navegación no dependerá de ell
 
 ```text
 project.zip
-├── pages/*.html
+├── **/*.html
 ├── styles/*.css
 ├── assets/**
 └── project.json
@@ -114,9 +120,11 @@ project.zip
 La versión del manifiesto se valida explícitamente. Un cambio incompatible
 requerirá una nueva versión y una migración, no una reinterpretación silenciosa.
 
-El exportador reserva `index.html` y `psl-runtime/navigation.js` para la página
-de entrada y el runtime generado. Los HTML importados solo se transforman en la
-copia exportada; el `ProjectBundle` conserva sus bytes originales.
+El exportador reserva `psl-runtime/navigation.js` para el runtime generado. Si
+el proyecto ya utiliza `index.html` como pantalla, la conserva y le inyecta el
+runtime. En caso contrario genera un `index.html` de entrada. Los HTML
+importados solo se transforman en la copia exportada; el `ProjectBundle`
+conserva sus bytes originales.
 
 ## Decisión sobre el canvas
 

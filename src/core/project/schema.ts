@@ -3,7 +3,13 @@ import { z } from 'zod'
 export const PageSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  file: z.string().regex(/^pages\/.+\.html$/),
+  file: z.string().min(1).refine((value) => {
+    const hasUnsafeSegment = value.split('/').some((segment) => segment === '..')
+    return value.toLowerCase().endsWith('.html')
+      && !value.startsWith('/')
+      && !value.includes('\\')
+      && !hasUnsafeSegment
+  }, 'Page files must use a safe relative HTML path.'),
 })
 
 export const ConnectionSchema = z.object({

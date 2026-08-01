@@ -1,3 +1,5 @@
 export { ExportProjectButton } from './ui/ExportProjectButton'
+export { validateStaticArchive } from './validation/validateStaticArchive'
+export type { StaticArchiveValidation } from './validation/validateStaticArchive'
 export { ZipProjectExporter, zipProjectExporter } from './zip/ZipProjectExporter'
 export type { ProjectExporter } from './port'

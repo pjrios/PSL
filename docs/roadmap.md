@@ -42,10 +42,12 @@
 
 ## Hito 4 — Robustez responsive
 
-- [ ] Probar exportaciones reales de FigmaToCode.
-- [ ] Preservar media queries, fuentes y assets.
-- [ ] Pruebas end-to-end de navegación.
-- [ ] Validar el resultado en Cloudflare Pages.
+- [x] Probar un paquete HTML/CSS normalizado compatible con FigmaToCode.
+- [ ] Repetir la aceptación con un ZIP generado desde un diseño real en Figma.
+- [x] Preservar media queries, fuentes y assets.
+- [x] Prueba integral de importar, conectar, exportar, reimportar y navegar.
+- [x] Validar rutas y estructura con el contrato estático de Cloudflare Pages.
+- [ ] Desplegar el ZIP y verificarlo en una URL real de Cloudflare Pages.
 
 ## Después de navegación
 

@@ -125,7 +125,7 @@ export function AppShell() {
           <span className="brand-mark" aria-hidden="true">PSL</span>
           <div>
             <p>PSL Visual Builder</p>
-            <span>Hito 3 · Probar y exportar</span>
+            <span>Hito 4 · Responsive robusto</span>
           </div>
         </div>
 
