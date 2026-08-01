@@ -1,0 +1,1 @@
+export { PageCatalog } from './PageCatalog'

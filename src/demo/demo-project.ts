@@ -1,0 +1,13 @@
+import type { VisualBuilderProject } from '../core/project'
+
+export const demoProject: VisualBuilderProject = {
+  version: 1,
+  name: 'PSL Demo',
+  startPage: 'inicio',
+  pages: [
+    { id: 'inicio', name: 'Inicio', file: 'pages/inicio.html' },
+    { id: 'catalogo', name: 'Catálogo', file: 'pages/catalogo.html' },
+    { id: 'practica', name: 'Práctica', file: 'pages/practica.html' },
+  ],
+  connections: [],
+}
