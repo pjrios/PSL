@@ -72,8 +72,9 @@ importar desde `modules` ni `app`.
 
 ### `modules/navigation`
 
-- Administrará selección de elementos y conexiones.
-- Solo escribirá conexiones en el manifiesto del proyecto.
+- Administra el formulario y las operaciones inmutables de conexiones.
+- Solo escribe conexiones en el manifiesto del proyecto.
+- Detecta referencias a elementos o páginas que desaparecieron.
 
 ### `modules/exporter`
 
@@ -111,8 +112,13 @@ project.zip
 La versión del manifiesto se valida explícitamente. Un cambio incompatible
 requerirá una nueva versión y una migración, no una reinterpretación silenciosa.
 
-## Decisión sobre GrapesJS
+## Decisión sobre el canvas
 
-GrapesJS se incorporará como detalle interno del canvas cuando comience la
-selección visual. No formará parte del esquema ni del runtime. Esto permite
-reemplazarlo posteriormente sin invalidar proyectos guardados.
+La primera selección visual utiliza el DOM seguro del `iframe` mediante un
+adaptador interno de `preview`. Los identificadores se derivan de la jerarquía
+del elemento y se inyectan únicamente en la copia de edición. Los HTML y CSS
+originales permanecen intactos.
+
+GrapesJS queda aplazado hasta que exista una necesidad comprobada de modificar
+la estructura visual. Si se incorpora, será un adaptador reemplazable y no
+formará parte del esquema ni del runtime.

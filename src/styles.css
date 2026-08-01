@@ -134,6 +134,12 @@ button {
   background: #78ded2;
 }
 
+.button.danger {
+  color: #8b2f31;
+  background: #fff;
+  border-color: #e4b9ba;
+}
+
 .workspace {
   flex: 1;
   display: grid;
@@ -395,6 +401,120 @@ button {
   margin: 7px 0 0;
   font-size: 0.75rem;
   line-height: 1.5;
+}
+
+.interaction-form {
+  display: grid;
+  gap: 16px;
+}
+
+.selected-element-card {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 13px;
+  background: #e5f5f2;
+  border: 1px solid #bedfd9;
+  border-radius: 12px;
+}
+
+.selected-element-card strong,
+.selected-element-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-element-card strong {
+  color: #214f55;
+  font-size: 0.84rem;
+}
+
+.selected-element-card small {
+  color: #638087;
+  font-size: 0.65rem;
+}
+
+.element-tag {
+  width: fit-content;
+  padding: 3px 6px;
+  color: #246c66;
+  background: #cceae5;
+  border-radius: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.interaction-form label {
+  display: grid;
+  gap: 7px;
+  color: #426168;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.interaction-form select,
+.interaction-form input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  color: #244c53;
+  background: white;
+  border: 1px solid #cbdcda;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 600;
+}
+
+.interaction-form select:focus,
+.interaction-form input:focus {
+  border-color: #168f86;
+  outline: 3px solid rgba(22, 143, 134, 0.14);
+}
+
+.interaction-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.form-error {
+  margin: 0;
+  color: #8b2f31;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.connection-warnings {
+  margin-top: 18px;
+  padding: 12px;
+  color: #744f1d;
+  background: #fff8e8;
+  border: 1px solid #ead49d;
+  border-radius: 11px;
+}
+
+.connection-warnings h3 {
+  margin: 0;
+  font-size: 0.74rem;
+}
+
+.connection-warnings ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-warnings li {
+  display: grid;
+  gap: 2px;
+  font-size: 0.66rem;
+}
+
+.connection-warnings span {
+  color: #826a45;
 }
 
 .foundation-status {
