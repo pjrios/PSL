@@ -1,5 +1,7 @@
 export { PreviewCanvas } from './PreviewCanvas'
 export type { PreviewElementSelection } from './PreviewCanvas'
+export type { PreviewMode } from './PreviewCanvas'
 export { assignStableElementIds, createStableElementId } from './element-identifiers'
 export { buildPreviewDocument, collectPreviewElementIds } from './buildPreviewDocument'
+export type { PreviewDocumentOptions } from './buildPreviewDocument'
 export type { Viewport } from './PreviewCanvas'

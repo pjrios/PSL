@@ -36,8 +36,8 @@ export function PageCatalog({ activePageId, onPageSelect, project }: PageCatalog
       </nav>
 
       <div className="milestone-note">
-        <strong>Próximo: Hito 2</strong>
-        <p>Seleccionar botones y conectarlos visualmente con otras pantallas.</p>
+        <strong>Próximo: Hito 4</strong>
+        <p>Validar diseños responsive reales y su publicación estática.</p>
       </div>
     </aside>
   )

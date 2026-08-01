@@ -53,4 +53,20 @@ describe('ProjectSchema', () => {
 
     expect(result.success).toBe(false)
   })
+
+  it('rejects unsafe external URL protocols', () => {
+    const result = ProjectSchema.safeParse({
+      ...validProject,
+      connections: [{
+        id: 'connection-url',
+        sourcePage: 'home',
+        elementId: 'home::button:1',
+        event: 'click',
+        action: 'url',
+        url: 'javascript:alert(1)',
+      }],
+    })
+
+    expect(result.success).toBe(false)
+  })
 })

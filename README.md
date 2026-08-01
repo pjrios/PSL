@@ -6,7 +6,7 @@ autenticación con Supabase, componentes MediaPipe y exportación para Cloudflar
 
 ## Estado
 
-El repositorio completó localmente el **Hito 2 — Navegación visual**. Incluye:
+El repositorio completó localmente el **Hito 3 — Prueba y exportación**. Incluye:
 
 - Shell visual del editor.
 - Tres pantallas responsive de demostración.
@@ -20,9 +20,14 @@ El repositorio completó localmente el **Hito 2 — Navegación visual**. Incluy
 - Acciones para navegar, regresar y abrir una URL.
 - Conexiones editables almacenadas en `project.json`.
 - Advertencias para conexiones cuyos elementos desaparecieron.
+- Modos separados para editar y probar la aplicación.
+- Navegación funcional e historial dentro de la vista previa.
+- Exportación ZIP con una entrada `index.html` para hosting estático.
+- Runtime independiente compartido por la prueba y la exportación.
+- Reimportación sin pérdida ni duplicación de conexiones.
 
-La ejecución real de las conexiones y la descarga del proyecto corresponden al
-Hito 3.
+El siguiente hito probará exportaciones reales de FigmaToCode y reforzará la
+compatibilidad responsive antes de integrar servicios externos.
 
 ## Ejecutar localmente
 
@@ -59,8 +64,8 @@ src/
 │   ├── page-catalog/    Lista de pantallas
 │   ├── preview/         Vista segura y responsive
 │   ├── navigation/      Edición y validación de conexiones visuales
-│   └── exporter/        Salida ZIP
-└── runtime/             Código para la aplicación exportada
+│   └── exporter/        Salida ZIP desplegable
+└── runtime/             Navegación compartida entre prueba y exportación
 ```
 
 Consulte [docs/architecture.md](docs/architecture.md) para los límites de los
@@ -93,8 +98,8 @@ El flujo de edición disponible es:
 Importar → seleccionar → conectar → probar → exportar
 ```
 
-Actualmente están disponibles los tres primeros pasos. Probar y exportar se
-implementarán en el Hito 3.
+Los cinco pasos están disponibles. El ZIP resultante incluye una página de
+entrada y puede servirse como un sitio estático.
 
 Supabase y MediaPipe permanecerán fuera del núcleo de navegación y se añadirán
 como módulos independientes después de validar este flujo.

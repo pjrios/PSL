@@ -13,7 +13,10 @@ export const ConnectionSchema = z.object({
   event: z.literal('click'),
   action: z.enum(['navigate', 'back', 'url']),
   targetPage: z.string().min(1).optional(),
-  url: z.string().url().optional(),
+  url: z.string().url().refine((value) => {
+    const protocol = new URL(value).protocol
+    return protocol === 'http:' || protocol === 'https:'
+  }, 'URLs must use http or https.').optional(),
 })
 
 export const ProjectSchema = z

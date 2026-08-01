@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProjectBundle, ProjectPage } from '../../core/project'
+import { isNavigationRuntimeMessage } from '../../runtime/navigation-runtime'
+import type { NavigationRuntimeMessage } from '../../runtime/navigation-runtime'
 import { buildPreviewDocument } from './buildPreviewDocument'
 import { describeSelectableElement, findSelectableTarget } from './element-identifiers'
 
 export type Viewport = 'desktop' | 'tablet' | 'mobile'
+export type PreviewMode = 'edit' | 'test'
 
 const viewportWidths: Record<Viewport, string> = {
   desktop: '100%',
@@ -13,7 +16,10 @@ const viewportWidths: Record<Viewport, string> = {
 
 interface PreviewCanvasProps {
   bundle: ProjectBundle
+  mode: PreviewMode
   onElementSelect: (selection: PreviewElementSelection | null) => void
+  onModeChange: (mode: PreviewMode) => void
+  onRuntimeAction: (message: NavigationRuntimeMessage) => void
   page: ProjectPage
   selectedElementId?: string
 }
@@ -27,7 +33,10 @@ export interface PreviewElementSelection {
 
 export function PreviewCanvas({
   bundle,
+  mode,
   onElementSelect,
+  onModeChange,
+  onRuntimeAction,
   page,
   selectedElementId,
 }: PreviewCanvasProps) {
@@ -38,13 +47,23 @@ export function PreviewCanvas({
 
   useEffect(() => {
     try {
-      setPreview(buildPreviewDocument(bundle, page))
+      setPreview(buildPreviewDocument(bundle, page, { mode }))
       setPreviewError(null)
     } catch (error) {
       setPreview('')
       setPreviewError(error instanceof Error ? error.message : 'No se pudo mostrar la pantalla.')
     }
-  }, [bundle.files, page.file, page.id])
+  }, [bundle.files, bundle.manifest.connections, mode, page.file, page.id])
+
+  useEffect(() => {
+    function receiveRuntimeMessage(event: MessageEvent<unknown>) {
+      if (event.source !== iframeRef.current?.contentWindow) return
+      if (isNavigationRuntimeMessage(event.data)) onRuntimeAction(event.data)
+    }
+
+    window.addEventListener('message', receiveRuntimeMessage)
+    return () => window.removeEventListener('message', receiveRuntimeMessage)
+  }, [onRuntimeAction])
 
   function updateSelectionHighlight(document: Document) {
     document.querySelectorAll<HTMLElement>('[data-builder-selected]')
@@ -57,8 +76,9 @@ export function PreviewCanvas({
   }
 
   function connectSelectionEvents() {
+    if (mode !== 'edit') return
     const document = iframeRef.current?.contentDocument
-    if (!document) return undefined
+    if (!document) return
 
     const selectElement = (event: MouseEvent) => {
       event.preventDefault()
@@ -84,35 +104,51 @@ export function PreviewCanvas({
 
     document.addEventListener('click', selectElement, true)
     updateSelectionHighlight(document)
-    return () => document.removeEventListener('click', selectElement, true)
   }
 
   useEffect(() => {
+    if (mode !== 'edit') return
     const document = iframeRef.current?.contentDocument
     if (document) updateSelectionHighlight(document)
-  }, [selectedElementId])
+  }, [mode, selectedElementId])
 
   return (
     <section className="canvas-area">
       <div className="canvas-toolbar">
         <div>
-          <span className="status-dot" aria-hidden="true" />
+          <span className={`status-dot ${mode === 'test' ? 'testing' : ''}`} aria-hidden="true" />
           <strong>{page.name}</strong>
           <span className="file-label">{page.file}</span>
         </div>
 
-        <div className="viewport-switcher" aria-label="Tamaño de vista previa">
-          {(['desktop', 'tablet', 'mobile'] as Viewport[]).map((size) => (
-            <button
-              aria-pressed={viewport === size}
-              className={viewport === size ? 'active' : ''}
-              key={size}
-              onClick={() => setViewport(size)}
-              type="button"
-            >
-              {size === 'desktop' ? 'Escritorio' : size === 'tablet' ? 'Tableta' : 'Móvil'}
-            </button>
-          ))}
+        <div className="canvas-controls">
+          <div className="mode-switcher" aria-label="Modo de vista previa">
+            {(['edit', 'test'] as PreviewMode[]).map((value) => (
+              <button
+                aria-pressed={mode === value}
+                className={mode === value ? 'active' : ''}
+                key={value}
+                onClick={() => onModeChange(value)}
+                type="button"
+              >
+                {value === 'edit' ? 'Editar' : 'Probar'}
+              </button>
+            ))}
+          </div>
+
+          <div className="viewport-switcher" aria-label="Tamaño de vista previa">
+            {(['desktop', 'tablet', 'mobile'] as Viewport[]).map((size) => (
+              <button
+                aria-pressed={viewport === size}
+                className={viewport === size ? 'active' : ''}
+                key={size}
+                onClick={() => setViewport(size)}
+                type="button"
+              >
+                {size === 'desktop' ? 'Escritorio' : size === 'tablet' ? 'Tableta' : 'Móvil'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -122,9 +158,9 @@ export function PreviewCanvas({
         ) : (
           <iframe
             ref={iframeRef}
-            key={`${page.id}-${viewport}`}
+            key={`${page.id}-${viewport}-${mode}`}
             onLoad={connectSelectionEvents}
-            sandbox="allow-same-origin"
+            sandbox={mode === 'edit' ? 'allow-same-origin' : 'allow-scripts'}
             srcDoc={preview}
             style={{ width: viewportWidths[viewport] }}
             title={`Vista previa de ${page.name}`}

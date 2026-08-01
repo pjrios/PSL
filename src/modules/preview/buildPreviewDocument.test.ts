@@ -88,4 +88,29 @@ describe('buildPreviewDocument', () => {
       'home::main:1/button:1',
     ]))
   })
+
+  it('injects the standalone runtime only in test mode', () => {
+    const bundle: ProjectBundle = {
+      manifest: {
+        version: 1,
+        name: 'Runtime fixture',
+        startPage: 'home',
+        pages: [{ id: 'home', name: 'Home', file: 'pages/home.html' }],
+        connections: [],
+      },
+      files: [{
+        path: 'pages/home.html',
+        mediaType: 'text/html',
+        bytes: encoder.encode('<html><body><button>Continue</button></body></html>'),
+      }],
+    }
+
+    const editPreview = buildPreviewDocument(bundle, bundle.manifest.pages[0])
+    const testPreview = buildPreviewDocument(bundle, bundle.manifest.pages[0], { mode: 'test' })
+
+    expect(editPreview).not.toContain('data-psl-runtime')
+    expect(testPreview).toContain('data-psl-config="true"')
+    expect(testPreview).toContain('data-psl-runtime="true"')
+    expect(testPreview).toContain('psl-navigation-runtime')
+  })
 })

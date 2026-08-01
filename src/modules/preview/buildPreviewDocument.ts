@@ -1,5 +1,9 @@
 import DOMPurify from 'dompurify'
 import type { ProjectBundle, ProjectFile, ProjectPage } from '../../core/project'
+import {
+  createNavigationConfigSource,
+  createNavigationRuntimeSource,
+} from '../../runtime/navigation-runtime'
 import { assignStableElementIds } from './element-identifiers'
 
 const textDecoder = new TextDecoder()
@@ -72,7 +76,16 @@ function rewriteSrcSet(
     .join(', ')
 }
 
-export function buildPreviewDocument(bundle: ProjectBundle, page: ProjectPage) {
+export interface PreviewDocumentOptions {
+  mode?: 'edit' | 'test'
+}
+
+export function buildPreviewDocument(
+  bundle: ProjectBundle,
+  page: ProjectPage,
+  options: PreviewDocumentOptions = {},
+) {
+  const mode = options.mode ?? 'edit'
   const filesByPath = new Map(bundle.files.map((file) => [file.path, file]))
   const pageFile = filesByPath.get(page.file)
 
@@ -123,7 +136,7 @@ export function buildPreviewDocument(bundle: ProjectBundle, page: ProjectPage) {
     .map((file) => rewriteCssUrls(textDecoder.decode(file.bytes), file.path, filesByPath))
     .join('\n')
 
-  const previewSafetyStyles = `
+  const previewSafetyStyles = mode === 'edit' ? `
     html { min-height: 100%; }
     [data-builder-element-id] { cursor: crosshair !important; }
     [data-builder-element-id]:hover {
@@ -134,11 +147,26 @@ export function buildPreviewDocument(bundle: ProjectBundle, page: ProjectPage) {
       outline: 3px solid #168f86 !important;
       outline-offset: 2px !important;
     }
-  `
+  ` : 'html { min-height: 100%; }'
   const style = document.createElement('style')
   style.dataset.builderPreview = 'true'
   style.textContent = `${styles}\n${previewSafetyStyles}`
   document.head.append(style)
+
+  if (mode === 'test') {
+    const configScript = document.createElement('script')
+    configScript.dataset.pslConfig = 'true'
+    configScript.textContent = createNavigationConfigSource({
+      connections: bundle.manifest.connections,
+      currentPage: page.id,
+      pageUrls: {},
+      transport: 'message',
+    })
+    const runtimeScript = document.createElement('script')
+    runtimeScript.dataset.pslRuntime = 'true'
+    runtimeScript.textContent = createNavigationRuntimeSource()
+    document.body.append(configScript, runtimeScript)
+  }
 
   return `<!doctype html>\n${document.documentElement.outerHTML}`
 }

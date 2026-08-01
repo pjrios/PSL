@@ -93,6 +93,10 @@ button {
   position: relative;
 }
 
+.export-control {
+  position: relative;
+}
+
 .import-error {
   position: absolute;
   z-index: 10;
@@ -108,6 +112,22 @@ button {
   box-shadow: 0 8px 24px rgba(52, 27, 27, 0.16);
   font-size: 0.76rem;
   line-height: 1.4;
+}
+
+.export-error {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(300px, 80vw);
+  margin: 0;
+  padding: 10px 12px;
+  color: #8b2f31;
+  background: #fff0f0;
+  border: 1px solid #e8babb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(52, 27, 27, 0.16);
+  font-size: 0.76rem;
 }
 
 .button {
@@ -308,6 +328,10 @@ button {
   border-radius: 50%;
 }
 
+.status-dot.testing {
+  background: #e49b31;
+}
+
 .file-label {
   overflow: hidden;
   color: #74878b;
@@ -316,14 +340,21 @@ button {
   white-space: nowrap;
 }
 
-.viewport-switcher {
+.canvas-controls {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.viewport-switcher,
+.mode-switcher {
   flex: 0 0 auto;
   padding: 3px;
   background: #e7efee;
   border-radius: 9px;
 }
 
-.viewport-switcher button {
+.viewport-switcher button,
+.mode-switcher button {
   padding: 6px 9px;
   color: #5d7277;
   background: transparent;
@@ -334,10 +365,16 @@ button {
   font-weight: 700;
 }
 
-.viewport-switcher button.active {
+.viewport-switcher button.active,
+.mode-switcher button.active {
   color: #17474e;
   background: white;
   box-shadow: 0 1px 4px rgba(28, 60, 64, 0.14);
+}
+
+.mode-switcher button.active {
+  color: #7a4b0a;
+  background: #fff3d7;
 }
 
 .canvas-stage {
@@ -517,6 +554,33 @@ button {
   color: #826a45;
 }
 
+.test-status-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  color: #315159;
+  background: #fff7e5;
+  border: 1px solid #e8d29e;
+  border-radius: 14px;
+}
+
+.test-status-card > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: #70460c;
+  background: #f4ce7c;
+  border-radius: 12px;
+}
+
+.test-status-card p {
+  margin: 0;
+  color: #776746;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
 .foundation-status {
   display: grid;
   gap: 0;
@@ -570,6 +634,12 @@ button {
   }
 
   .canvas-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .canvas-controls {
+    width: 100%;
     align-items: flex-start;
     flex-direction: column;
   }
