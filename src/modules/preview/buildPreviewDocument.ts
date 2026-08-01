@@ -17,7 +17,8 @@ function fileDirectory(path: string) {
 function resolveProjectPath(path: string, baseFile: string) {
   if (/^(?:[a-z]+:|#|\/\/)/i.test(path)) return null
   const baseDirectory = fileDirectory(baseFile)
-  const resolvedUrl = new URL(path, `https://project.local/${baseDirectory}/`)
+  const baseUrl = `https://project.local/${baseDirectory ? `${baseDirectory}/` : ''}`
+  const resolvedUrl = new URL(path, baseUrl)
   return resolvedUrl.pathname.replace(/^\//, '')
 }
 
@@ -59,6 +60,10 @@ function rewriteCssUrls(
   })
 }
 
+function isExternalResource(path: string) {
+  return /^(?:[a-z]+:|\/\/|#)/i.test(path)
+}
+
 function rewriteSrcSet(
   value: string,
   pagePath: string,
@@ -97,12 +102,39 @@ export function buildPreviewDocument(
     WHOLE_DOCUMENT: true,
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
     FORBID_ATTR: ['srcdoc'],
+    ADD_TAGS: ['link'],
+    ADD_ATTR: ['href', 'media', 'rel'],
   })
   const document = new DOMParser().parseFromString(cleanMarkup, 'text/html')
 
   document.querySelectorAll('meta[http-equiv="refresh" i]').forEach((node) => node.remove())
-  document.querySelectorAll('link[rel="stylesheet" i]').forEach((node) => node.remove())
   document.querySelectorAll('form').forEach((form) => form.removeAttribute('action'))
+
+  const linkedStyles = new Set<string>()
+  document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet" i]').forEach((link) => {
+    const href = link.getAttribute('href')?.trim()
+    if (!href || isExternalResource(href)) return
+
+    const cssPath = resolveProjectPath(href, page.file)
+    const cssFile = cssPath ? filesByPath.get(cssPath) : undefined
+    if (!cssPath || !cssFile) {
+      link.remove()
+      return
+    }
+
+    linkedStyles.add(cssPath)
+    const style = document.createElement('style')
+    style.dataset.builderStylesheet = cssPath
+    const media = link.getAttribute('media')
+    if (media) style.setAttribute('media', media)
+    style.textContent = rewriteCssUrls(textDecoder.decode(cssFile.bytes), cssPath, filesByPath)
+    link.replaceWith(style)
+  })
+
+  document.querySelectorAll<HTMLStyleElement>('style:not([data-builder-stylesheet])')
+    .forEach((style) => {
+      style.textContent = rewriteCssUrls(style.textContent ?? '', page.file, filesByPath)
+    })
 
   for (const element of document.querySelectorAll<HTMLElement>('[src], [poster]')) {
     for (const attribute of ['src', 'poster']) {
@@ -130,11 +162,13 @@ export function buildPreviewDocument(
 
   assignStableElementIds(document, page.id)
 
-  const styles = bundle.files
-    .filter((file) => file.mediaType === 'text/css' || file.path.endsWith('.css'))
-    .sort((left, right) => left.path.localeCompare(right.path))
-    .map((file) => rewriteCssUrls(textDecoder.decode(file.bytes), file.path, filesByPath))
-    .join('\n')
+  const fallbackStyles = linkedStyles.size === 0
+    ? bundle.files
+      .filter((file) => file.mediaType === 'text/css' || file.path.endsWith('.css'))
+      .sort((left, right) => left.path.localeCompare(right.path))
+      .map((file) => rewriteCssUrls(textDecoder.decode(file.bytes), file.path, filesByPath))
+      .join('\n')
+    : ''
 
   const previewSafetyStyles = mode === 'edit' ? `
     html { min-height: 100%; }
@@ -150,7 +184,7 @@ export function buildPreviewDocument(
   ` : 'html { min-height: 100%; }'
   const style = document.createElement('style')
   style.dataset.builderPreview = 'true'
-  style.textContent = `${styles}\n${previewSafetyStyles}`
+  style.textContent = `${fallbackStyles}\n${previewSafetyStyles}`
   document.head.append(style)
 
   if (mode === 'test') {

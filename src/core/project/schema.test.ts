@@ -18,6 +18,23 @@ describe('ProjectSchema', () => {
     expect(ProjectSchema.parse(validProject)).toEqual(validProject)
   })
 
+  it('accepts root and nested HTML files from design exporters', () => {
+    expect(ProjectSchema.safeParse({
+      ...validProject,
+      pages: [
+        { id: 'home', name: 'Home', file: 'index.html' },
+        { id: 'practice', name: 'Practice', file: 'figma/screens/practice.html' },
+      ],
+    }).success).toBe(true)
+  })
+
+  it('rejects unsafe page file paths', () => {
+    expect(ProjectSchema.safeParse({
+      ...validProject,
+      pages: [{ id: 'home', name: 'Home', file: '../index.html' }],
+    }).success).toBe(false)
+  })
+
   it('rejects a start page that does not exist', () => {
     const result = ProjectSchema.safeParse({
       ...validProject,

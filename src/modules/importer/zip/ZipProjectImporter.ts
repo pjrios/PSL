@@ -15,7 +15,7 @@ const textDecoder = new TextDecoder()
 function createManifest(files: ProjectFile[]): VisualBuilderProject {
   const htmlPaths = files
     .map((file) => file.path)
-    .filter((path) => /^pages\/[^/]+\.html$/i.test(path))
+    .filter((path) => path.toLowerCase().endsWith('.html'))
     .sort()
 
   if (htmlPaths.length === 0) {
