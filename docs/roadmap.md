@@ -1,0 +1,54 @@
+# Roadmap
+
+## Hito 0 — Fundación modular
+
+- [x] Proyecto React, Vite y TypeScript.
+- [x] Estructura modular con APIs públicas.
+- [x] Contrato `project.json` versión 1.
+- [x] Validación de páginas y conexiones.
+- [x] Proyecto de ejemplo con tres pantallas responsive.
+- [x] Shell visual del editor.
+- [x] Vista previa de escritorio, tableta y móvil.
+- [x] Pruebas del esquema.
+- [x] Documentación de arquitectura.
+- [x] Workflow de CI y comprobación de límites modulares.
+- [ ] Confirmar la primera ejecución de CI después del push.
+
+## Hito 1 — Importación
+
+- [x] Importar un ZIP en el navegador.
+- [x] Validar estructura y `project.json`.
+- [x] Crear un manifiesto cuando no exista.
+- [x] Resolver rutas de HTML, CSS y assets.
+- [x] Bloquear scripts durante la edición sin modificar los archivos originales.
+- [x] Informar errores de importación con claridad.
+- [x] Pruebas del importador y la vista previa segura.
+
+## Hito 2 — Navegación visual
+
+- [ ] Seleccionar elementos del HTML.
+- [ ] Asignar identificadores estables.
+- [ ] Configurar navegar, regresar y abrir URL.
+- [ ] Guardar conexiones sin modificar CSS.
+- [ ] Mostrar advertencias por conexiones rotas.
+
+## Hito 3 — Prueba y exportación
+
+- [ ] Alternar entre Editar y Probar.
+- [ ] Ejecutar navegación real en la vista previa.
+- [ ] Generar runtime de navegación independiente.
+- [ ] Exportar ZIP estático.
+- [ ] Reimportar sin perder conexiones.
+
+## Hito 4 — Robustez responsive
+
+- [ ] Probar exportaciones reales de FigmaToCode.
+- [ ] Preservar media queries, fuentes y assets.
+- [ ] Pruebas end-to-end de navegación.
+- [ ] Validar el resultado en Cloudflare Pages.
+
+## Después de navegación
+
+Los módulos de autenticación, MediaPipe y Cloudflare se planificarán después de
+cerrar los cuatro hitos anteriores. Cada módulo utilizará el mismo contrato de
+proyecto versionado.
