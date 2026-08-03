@@ -8,7 +8,18 @@ const encoder = new TextEncoder()
 
 const bundle: ProjectBundle = {
   manifest: {
-    version: 1,
+    version: 2,
+    elementOverrides: [{
+      pageId: 'home',
+      elementId: 'home::main:1/button:1',
+      content: { text: 'Start practice' },
+      styles: {
+        desktop: {
+          base: { backgroundColor: '#176f70' },
+          hover: { transform: 'translateY(-2px)' },
+        },
+      },
+    }],
     name: 'Export fixture',
     startPage: 'home',
     pages: [
@@ -50,12 +61,17 @@ describe('ZipProjectExporter', () => {
     const archive = await JSZip.loadAsync(await exported.arrayBuffer())
     const home = await archive.file('pages/home.html')!.async('string')
     const runtime = await archive.file('psl-runtime/navigation.js')!.async('string')
+    const overrides = await archive.file('psl-runtime/overrides.css')!.async('string')
     const index = await archive.file('index.html')!.async('string')
 
     expect(home).toContain('data-psl-config="true"')
     expect(home).toContain('src="../psl-runtime/navigation.js"')
     expect(home).toContain('practice.html')
     expect(runtime).toContain('pslElementId')
+    expect(home).toContain('Start practice')
+    expect(home).toContain('data-psl-overrides="true"')
+    expect(overrides).toContain('background-color:#176f70')
+    expect(overrides).toContain(':hover')
     expect(index).toContain('pages/home.html')
     expect(bundle.files[0].bytes).toBe(originalHome)
   })
@@ -77,7 +93,8 @@ describe('ZipProjectExporter', () => {
   it('uses an imported root index page instead of overwriting it with a redirect', async () => {
     const rootBundle: ProjectBundle = {
       manifest: {
-        version: 1,
+        version: 2,
+        elementOverrides: [],
         name: 'Root page fixture',
         startPage: 'index',
         pages: [{ id: 'index', name: 'Home', file: 'index.html' }],

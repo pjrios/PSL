@@ -1,8 +1,8 @@
 # PSL Visual Builder
 
 Editor visual modular para convertir pantallas diseñadas en Figma y exportadas
-como HTML/CSS en aplicaciones web navegables. En etapas posteriores incorporará
-autenticación con Supabase, componentes MediaPipe y exportación para Cloudflare.
+como HTML/CSS en aplicaciones web navegables. Incluye autenticación con
+Supabase y, en etapas posteriores, incorporará MediaPipe y publicación directa.
 
 ## Estado
 
@@ -12,7 +12,7 @@ responsive**. Incluye:
 - Shell visual del editor.
 - Tres pantallas responsive de demostración.
 - Vista previa en escritorio, tableta y móvil.
-- Esquema validado para `project.json` versión 1.
+- Esquema validado para `project.json` versión 2 con migración automática desde v1.
 - Límites modulares para importación, navegación, preview y exportación.
 - Importación de proyectos ZIP completamente en el navegador.
 - Creación automática de `project.json` cuando no esté presente.
@@ -20,6 +20,16 @@ responsive**. Incluye:
 - Selección visual de elementos sin modificar los archivos importados.
 - Acciones para navegar, regresar y abrir una URL.
 - Conexiones editables almacenadas en `project.json`.
+- Fuentes de datos estáticas o REST con referencias de registro genéricas.
+- Página de acceso con registro, inicio y cierre de sesión mediante Supabase.
+- Protección automática de las demás páginas y retorno después de iniciar sesión.
+- Listas repetidas que reutilizan una plantilla HTML por cada registro.
+- Navegación con contexto y vínculos seguros de campos hacia texto, imágenes y atributos.
+- Edición no destructiva de texto, imágenes, enlaces y atributos accesibles.
+- Inspector de estilos para estados normal, hover, focus y activo.
+- Overrides separados para escritorio, tableta y móvil.
+- Historial de deshacer/rehacer y restablecimiento por elemento.
+- Exportación de contenido editado y CSS generado en `psl-runtime/overrides.css`.
 - Advertencias para conexiones cuyos elementos desaparecieron.
 - Modos separados para editar y probar la aplicación.
 - Navegación funcional e historial dentro de la vista previa.
@@ -44,6 +54,21 @@ npm install
 npm run dev
 ```
 
+El editor requiere su propio proyecto de Supabase para las cuentas y los sitios
+guardados. Copie `.env.example` a `.env.local` y configure la URL y la
+publishable key. El esquema y la función serverless se administran con:
+
+```bash
+supabase link --project-ref <project-ref>
+supabase db push --linked
+supabase secrets set EDITOR_CONNECTION_ENCRYPTION_KEY=<base64-de-32-bytes>
+supabase functions deploy manage-editor-connection --use-api
+```
+
+Las secret keys de proyectos externos se cifran antes de guardarse. El
+navegador solamente puede leer metadatos enmascarados; la tabla de ciphertext
+no concede acceso a `anon` ni a `authenticated`.
+
 Validación:
 
 ```bash
@@ -66,6 +91,8 @@ src/
 ├── core/project/        Contrato y validación independientes
 ├── demo/                Adaptador del proyecto de ejemplo
 ├── modules/
+│   ├── design/          Contenido, estilos, estados y overrides responsive
+│   ├── data/            Fuentes, registros, listas repetidas y vínculos
 │   ├── importer/        Entrada ZIP
 │   ├── page-catalog/    Lista de pantallas
 │   ├── preview/         Vista segura y responsive
@@ -112,5 +139,9 @@ entrada y puede servirse como un sitio estático.
 La guía de publicación manual está en
 [docs/cloudflare-pages.md](docs/cloudflare-pages.md).
 
-Supabase y MediaPipe permanecerán fuera del núcleo de navegación y se añadirán
-como módulos independientes después de validar este flujo.
+La guía de pantallas impulsadas por datos está en
+[docs/data-driven-pages.md](docs/data-driven-pages.md).
+
+La autenticación permanece separada del núcleo de navegación y las políticas
+RLS siguen siendo la barrera real para proteger datos. MediaPipe se añadirá como
+módulo independiente después de validar este flujo.

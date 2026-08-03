@@ -92,9 +92,17 @@ export async function validateStaticArchive(source: Blob): Promise<StaticArchive
 
   let manifest
   try {
-    manifest = ProjectSchema.parse(JSON.parse(await manifestEntry.async('string')))
+    const parsedJson = JSON.parse(await manifestEntry.async('string'))
+    const result = ProjectSchema.safeParse(parsedJson)
+    if (!result.success) {
+      const issue = result.error.issues[0]
+      const location = issue.path.length ? `${issue.path.join('.')}: ` : ''
+      errors.push(`project.json no es válido: ${location}${issue.message}`)
+      return { valid: false, errors }
+    }
+    manifest = result.data
   } catch {
-    errors.push('project.json no es válido.')
+    errors.push('project.json no es JSON válido.')
     return { valid: false, errors }
   }
 

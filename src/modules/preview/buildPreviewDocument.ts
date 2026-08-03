@@ -1,5 +1,12 @@
 import DOMPurify from 'dompurify'
-import type { ProjectBundle, ProjectFile, ProjectPage } from '../../core/project'
+import type {
+  NavigationContext,
+  ProjectBundle,
+  ProjectFile,
+  ProjectPage,
+} from '../../core/project'
+import { applyStaticDataBindings } from '../data'
+import { applyContentOverrides, createOverrideCss } from '../design'
 import {
   createNavigationConfigSource,
   createNavigationRuntimeSource,
@@ -83,6 +90,7 @@ function rewriteSrcSet(
 
 export interface PreviewDocumentOptions {
   mode?: 'edit' | 'test'
+  context?: NavigationContext
 }
 
 export function buildPreviewDocument(
@@ -161,6 +169,8 @@ export function buildPreviewDocument(
   })
 
   assignStableElementIds(document, page.id)
+  applyContentOverrides(document, bundle.manifest, page.id)
+  applyStaticDataBindings(document, bundle.manifest, page.id, options.context ?? {})
 
   const fallbackStyles = linkedStyles.size === 0
     ? bundle.files
@@ -184,7 +194,7 @@ export function buildPreviewDocument(
   ` : 'html { min-height: 100%; }'
   const style = document.createElement('style')
   style.dataset.builderPreview = 'true'
-  style.textContent = `${fallbackStyles}\n${previewSafetyStyles}`
+  style.textContent = `${fallbackStyles}\n${createOverrideCss(bundle.manifest)}\n${previewSafetyStyles}`
   document.head.append(style)
 
   if (mode === 'test') {
@@ -193,8 +203,24 @@ export function buildPreviewDocument(
     configScript.textContent = createNavigationConfigSource({
       connections: bundle.manifest.connections,
       currentPage: page.id,
-      pageUrls: {},
+      pageUrls: Object.fromEntries(bundle.manifest.pages.map((candidate) => [
+        candidate.id,
+        candidate.file,
+      ])),
       transport: 'message',
+      dataSources: bundle.manifest.dataSources,
+      bindings: bundle.manifest.bindings,
+      currentContext: options.context,
+      repeaters: bundle.manifest.repeaters,
+      authentication: bundle.manifest.authentication,
+      pageAccess: Object.fromEntries(bundle.manifest.pages.map((candidate) => [
+        candidate.id,
+        candidate.access ?? (bundle.manifest.authentication
+          ? candidate.id === bundle.manifest.authentication.loginPage
+            ? 'guestOnly'
+            : 'authenticated'
+          : 'public'),
+      ])),
     })
     const runtimeScript = document.createElement('script')
     runtimeScript.dataset.pslRuntime = 'true'

@@ -3,7 +3,8 @@ import type { VisualBuilderProject } from './schema'
 import { ProjectSchema } from './schema'
 
 const validProject: VisualBuilderProject = {
-  version: 1,
+  version: 2,
+  elementOverrides: [],
   name: 'Schema fixture',
   startPage: 'home',
   pages: [
@@ -14,6 +15,17 @@ const validProject: VisualBuilderProject = {
 }
 
 describe('ProjectSchema', () => {
+  it('migrates version 1 manifests to version 2', () => {
+    const migrated = ProjectSchema.parse({
+      ...validProject,
+      version: 1,
+      elementOverrides: undefined,
+    })
+
+    expect(migrated.version).toBe(2)
+    expect(migrated.elementOverrides).toEqual([])
+  })
+
   it('accepts the milestone zero demo project', () => {
     expect(ProjectSchema.parse(validProject)).toEqual(validProject)
   })
@@ -53,6 +65,36 @@ describe('ProjectSchema', () => {
     expect(result.success).toBe(false)
   })
 
+  it('validates project authentication routes', () => {
+    expect(ProjectSchema.safeParse({
+      ...validProject,
+      pages: validProject.pages.map((page) => ({
+        ...page,
+        access: page.id === 'home' ? 'guestOnly' : 'authenticated',
+      })),
+      authentication: {
+        provider: 'supabase',
+        projectUrl: 'https://school.supabase.co',
+        publishableKey: 'sb_publishable_test_key',
+        loginPage: 'home',
+        afterLoginPage: 'practice',
+        afterLogoutPage: 'home',
+      },
+    }).success).toBe(true)
+
+    expect(ProjectSchema.safeParse({
+      ...validProject,
+      authentication: {
+        provider: 'supabase',
+        projectUrl: 'https://school.supabase.co',
+        publishableKey: 'sb_publishable_test_key',
+        loginPage: 'missing',
+        afterLoginPage: 'home',
+        afterLogoutPage: 'home',
+      },
+    }).success).toBe(false)
+  })
+
   it('rejects navigation to an unknown page', () => {
     const result = ProjectSchema.safeParse({
       ...validProject,
@@ -85,5 +127,32 @@ describe('ProjectSchema', () => {
     })
 
     expect(result.success).toBe(false)
+  })
+
+  it('requires current-user single-row bindings to reference a data source', () => {
+    expect(ProjectSchema.safeParse({
+      ...validProject,
+      bindings: [{
+        id: 'profile-name',
+        pageId: 'home',
+        elementId: 'home::h1:1',
+        target: 'text',
+        contextKey: 'record',
+        sourceMode: 'first',
+        field: 'display_name',
+      }],
+    }).success).toBe(false)
+  })
+
+  it('rejects duplicate overrides for the same element', () => {
+    const override = {
+      pageId: 'home',
+      elementId: 'home::button:1',
+      content: { text: 'Continue' },
+    }
+    expect(ProjectSchema.safeParse({
+      ...validProject,
+      elementOverrides: [override, override],
+    }).success).toBe(false)
   })
 })

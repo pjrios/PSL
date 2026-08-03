@@ -44,12 +44,14 @@ export function ImportProjectButton({ onImport }: ImportProjectButtonProps) {
         type="file"
       />
       <button
-        className="button secondary"
+        aria-label={isImporting ? 'Importando proyecto' : 'Importar proyecto'}
+        className="button secondary compact-action"
+        data-tooltip={isImporting ? 'Importando…' : 'Importar proyecto'}
         disabled={isImporting}
         onClick={() => inputRef.current?.click()}
         type="button"
       >
-        {isImporting ? 'Importando…' : 'Importar proyecto'}
+        <span aria-hidden="true">↥</span>
       </button>
       {error && <p className="import-error" role="alert">{error}</p>}
     </div>

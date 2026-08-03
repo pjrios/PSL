@@ -1,7 +1,8 @@
 import type { VisualBuilderProject } from '../core/project'
 
 export const demoProject: VisualBuilderProject = {
-  version: 1,
+  version: 2,
+  elementOverrides: [],
   name: 'PSL Demo',
   startPage: 'inicio',
   pages: [
@@ -9,5 +10,122 @@ export const demoProject: VisualBuilderProject = {
     { id: 'catalogo', name: 'Catálogo', file: 'pages/catalogo.html' },
     { id: 'practica', name: 'Práctica', file: 'pages/practica.html' },
   ],
-  connections: [],
+  dataSources: [
+    {
+      id: 'signs',
+      name: 'Señas',
+      type: 'static',
+      records: [
+        {
+          id: 'hola',
+          name: 'Hola',
+          emoji: '👋',
+          practiceTitle: 'Practica la seña “Hola”',
+          description: 'Saludo básico para comenzar una conversación.',
+        },
+        {
+          id: 'gracias',
+          name: 'Gracias',
+          emoji: '🙏',
+          practiceTitle: 'Practica la seña “Gracias”',
+          description: 'Expresión cotidiana de agradecimiento.',
+        },
+        {
+          id: 'amistad',
+          name: 'Amistad',
+          emoji: '🤝',
+          practiceTitle: 'Practica la seña “Amistad”',
+          description: 'Seña relacionada con amigos y comunidad.',
+        },
+      ],
+    },
+  ],
+  bindings: [
+    {
+      id: 'demo-catalog-emoji-binding',
+      pageId: 'catalogo',
+      elementId: 'catalogo::div:1/main:1/section:1/article:1/div:1',
+      target: 'text',
+      contextKey: 'item',
+      field: 'emoji',
+    },
+    {
+      id: 'demo-catalog-name-binding',
+      pageId: 'catalogo',
+      elementId: 'catalogo::div:1/main:1/section:1/article:1/h2:1',
+      target: 'text',
+      contextKey: 'item',
+      field: 'name',
+    },
+    {
+      id: 'demo-catalog-description-binding',
+      pageId: 'catalogo',
+      elementId: 'catalogo::div:1/main:1/section:1/article:1/p:1',
+      target: 'text',
+      contextKey: 'item',
+      field: 'description',
+    },
+    {
+      id: 'demo-practice-title-binding',
+      pageId: 'practica',
+      elementId: 'practica::div:1/main:1/header:1/h2:1',
+      target: 'text',
+      contextKey: 'selectedSign',
+      field: 'practiceTitle',
+      fallback: 'Practica una seña',
+    },
+    {
+      id: 'demo-practice-description-binding',
+      pageId: 'practica',
+      elementId: 'practica::div:1/main:1/header:1/p:1',
+      target: 'text',
+      contextKey: 'selectedSign',
+      field: 'description',
+    },
+  ],
+  repeaters: [
+    {
+      id: 'demo-catalog-list',
+      pageId: 'catalogo',
+      elementId: 'catalogo::div:1/main:1/section:1/article:1',
+      dataSourceId: 'signs',
+      itemContext: 'item',
+    },
+  ],
+  connections: [
+    {
+      id: 'demo-start-practice',
+      sourcePage: 'inicio',
+      elementId: 'inicio::div:1/main:1/section:1/div:1/button:1',
+      event: 'click',
+      action: 'navigate',
+      targetPage: 'practica',
+    },
+    {
+      id: 'demo-open-catalog',
+      sourcePage: 'inicio',
+      elementId: 'inicio::div:1/main:1/section:1/div:1/button:2',
+      event: 'click',
+      action: 'navigate',
+      targetPage: 'catalogo',
+    },
+    {
+      id: 'demo-practice-selected-sign',
+      sourcePage: 'catalogo',
+      elementId: 'catalogo::div:1/main:1/section:1/article:1',
+      event: 'click',
+      action: 'navigate',
+      targetPage: 'practica',
+      context: {
+        selectedSign: { dataSourceId: 'signs', recordId: '$record.id' },
+      },
+    },
+    {
+      id: 'demo-finish-practice',
+      sourcePage: 'practica',
+      elementId: 'practica::div:1/main:1/section:1/aside:1/button:1',
+      event: 'click',
+      action: 'back',
+    },
+  ],
 }

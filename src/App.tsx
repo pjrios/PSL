@@ -1,1 +1,14 @@
-export { AppShell as default } from './app'
+import { AppShell } from './app/index'
+import { OpenSourceEditor } from './editor'
+import { EditorAccountGate } from './editor-platform'
+
+export default function App() {
+  const showLegacyEditor = new URLSearchParams(window.location.search).has('legacy')
+  return <EditorAccountGate>{(account) => showLegacyEditor
+    ? <AppShell />
+    : <OpenSourceEditor
+        accountEmail={account.email}
+        editorProjectId={account.project.id}
+        onSignOut={account.signOut}
+      />}</EditorAccountGate>
+}

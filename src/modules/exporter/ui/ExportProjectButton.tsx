@@ -51,13 +51,15 @@ export function ExportProjectButton({ bundle, disabled }: ExportProjectButtonPro
   return (
     <div className="export-control">
       <button
-        className="button primary"
+        aria-label={exporting ? 'Preparando exportación' : 'Exportar proyecto'}
+        className="button primary compact-action"
+        data-tooltip={disabled ? 'Corrige las conexiones antes de exportar' : exporting ? 'Preparando…' : 'Exportar proyecto'}
         disabled={disabled || exporting}
         onClick={exportProject}
         title={disabled ? 'Corrige las conexiones rotas antes de exportar.' : undefined}
         type="button"
       >
-        {exporting ? 'Preparando…' : 'Exportar ZIP'}
+        <span aria-hidden="true">↧</span>
       </button>
       {error && <p className="export-error" role="alert">{error}</p>}
     </div>

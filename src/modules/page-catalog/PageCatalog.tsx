@@ -9,15 +9,26 @@ interface PageCatalogProps {
 export function PageCatalog({ activePageId, onPageSelect, project }: PageCatalogProps) {
   return (
     <aside className="sidebar pages-panel">
-      <div className="panel-heading">
+      <div className="brand sidebar-brand">
+        <span className="brand-mark" aria-hidden="true">V</span>
         <div>
-          <span className="eyebrow">{project.name}</span>
-          <h1>Pantallas</h1>
+          <p>Editor visual</p>
+          <span title={project.name}>{project.name}</span>
         </div>
-        <span className="count">{project.pages.length}</span>
       </div>
 
-      <nav aria-label="Pantallas del proyecto" className="page-list">
+      <div className="panel-heading">
+        <h1>Páginas</h1>
+        <button
+          aria-label="Añadir página"
+          className="icon-button"
+          data-tooltip="Añadir página"
+          disabled
+          type="button"
+        >+</button>
+      </div>
+
+      <nav aria-label="Páginas del proyecto" className="page-list">
         {project.pages.map((page) => (
           <button
             className={`page-item ${page.id === activePageId ? 'active' : ''}`}
@@ -28,17 +39,12 @@ export function PageCatalog({ activePageId, onPageSelect, project }: PageCatalog
             <span className="page-icon" aria-hidden="true" />
             <span>
               <strong>{page.name}</strong>
-              <small>{page.file}</small>
+              <small title={page.file}>{page.file}</small>
             </span>
-            {page.id === project.startPage && <em>Inicial</em>}
+            {page.id === project.startPage && <em title="Página inicial">●</em>}
           </button>
         ))}
       </nav>
-
-      <div className="milestone-note">
-        <strong>Hito 4 · Validación responsive</strong>
-        <p>Conserva CSS, fuentes y assets antes de publicar el ZIP.</p>
-      </div>
     </aside>
   )
 }

@@ -14,7 +14,8 @@ async function archiveBlob(files: Record<string, string>) {
 describe('ZipProjectImporter', () => {
   it('imports and validates a project manifest', async () => {
     const manifest = {
-      version: 1,
+      version: 2,
+      elementOverrides: [],
       name: 'Imported project',
       startPage: 'home',
       pages: [{ id: 'home', name: 'Home', file: 'pages/home.html' }],
@@ -63,7 +64,8 @@ describe('ZipProjectImporter', () => {
   it('rejects a manifest that references a missing page', async () => {
     const source = await archiveBlob({
       'project.json': JSON.stringify({
-        version: 1,
+        version: 2,
+        elementOverrides: [],
         name: 'Broken project',
         startPage: 'missing',
         pages: [{ id: 'missing', name: 'Missing', file: 'pages/missing.html' }],

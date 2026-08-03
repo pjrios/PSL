@@ -2,8 +2,8 @@
 
 ## Objetivo
 
-PSL Visual Builder transforma pantallas HTML/CSS en una aplicación navegable y,
-en hitos posteriores, añadirá autenticación, MediaPipe y publicación. Cada una
+PSL Visual Builder transforma pantallas HTML/CSS en una aplicación navegable con
+autenticación opcional y, en hitos posteriores, añadirá MediaPipe y publicación. Cada una
 de esas capacidades debe poder evolucionar sin reescribir las demás.
 
 ## Principios
@@ -28,7 +28,8 @@ del editor o si un módulo intenta alcanzar los archivos internos de otro.
 │ app/                 Composición e interfaz principal        │
 ├──────────────────────────────────────────────────────────────┤
 │ modules/             Funciones independientes                │
-│ importer · page-catalog · preview · navigation · exporter    │
+│ design · importer · page-catalog · preview · navigation      │
+│ · exporter                                                   │
 ├──────────────────────────────────────────────────────────────┤
 │ core/project         Esquema, tipos y validación              │
 ├──────────────────────────────────────────────────────────────┤
@@ -43,7 +44,8 @@ importar desde `modules` ni `app`.
 
 ### `core/project`
 
-- Define `ProjectSchema` versión 1.
+- Define `ProjectSchema` versión 2 y migra manifiestos versión 1.
+- Valida overrides de contenido, estilo, estado y viewport por elemento.
 - Valida páginas, pantalla inicial y conexiones.
 - Define `ProjectBundle`, representación en memoria de un proyecto importado.
 - No contiene interfaz de usuario.
@@ -52,7 +54,7 @@ importar desde `modules` ni `app`.
 
 - Recibirá un `Blob` ZIP.
 - Devuelve un `ProjectBundle` validado.
-- Genera un manifiesto versión 1 si el ZIP no contiene `project.json`.
+- Genera un manifiesto versión 2 si el ZIP no contiene `project.json`.
 - Descubre HTML en la raíz o en carpetas anidadas para aceptar salidas de
   herramientas de diseño sin obligarlas a usar `pages/`.
 - Conserva todos los archivos originales en memoria.
@@ -62,6 +64,14 @@ importar desde `modules` ni `app`.
 
 - Presenta las páginas disponibles.
 - No decide cómo se guardan ni se importan.
+
+### `modules/design`
+
+- Administra overrides inmutables de contenido y estilo.
+- Genera CSS para estados normal, hover, focus, active y disabled.
+- Genera media queries para tableta y móvil.
+- Aplica la misma transformación en preview y exportación.
+- Mantiene intactos los bytes HTML/CSS importados.
 
 ### `modules/preview`
 
@@ -85,6 +95,7 @@ importar desde `modules` ni `app`.
 - Recibe un `ProjectBundle` sin modificarlo.
 - Genera un ZIP estático con manifiesto actualizado, página de entrada y runtime.
 - Inyecta configuración por pantalla únicamente en las copias exportadas.
+- Aplica contenido editado y genera `psl-runtime/overrides.css` en las copias.
 - Expone `ProjectExporter` como puerto y `ZipProjectExporter` como adaptador.
 - Valida el ZIP final como un árbol estático sensible a mayúsculas antes de la
   descarga, sin acoplarse a la API de Cloudflare.
@@ -94,14 +105,15 @@ importar desde `modules` ni `app`.
 - Contiene JavaScript mínimo de navegación y no conoce la interfaz del editor.
 - Usa mensajes en el modo Probar y URLs relativas dentro del ZIP.
 - Es el mismo código en ambos contextos, evitando comportamientos divergentes.
+- Mantiene y renueva la sesión de Supabase cuando existe una página de acceso.
+- Protege las demás páginas y conserva el destino solicitado para volver
+  después del inicio de sesión.
 
 ## Módulos futuros
 
 ```text
-modules/authentication/   Supabase Auth y pantallas protegidas
 modules/mediapipe/        Componentes y configuración visual
 modules/cloudflare/       Preparación o publicación del build
-runtime/authentication/   Sesión en la aplicación exportada
 runtime/mediapipe/        Cámara, landmarks y comparación
 ```
 
@@ -126,13 +138,13 @@ runtime. En caso contrario genera un `index.html` de entrada. Los HTML
 importados solo se transforman en la copia exportada; el `ProjectBundle`
 conserva sus bytes originales.
 
-## Decisión sobre el canvas
+## Decisión sobre el editor
 
-La primera selección visual utiliza el DOM seguro del `iframe` mediante un
-adaptador interno de `preview`. Los identificadores se derivan de la jerarquía
-del elemento y se inyectan únicamente en la copia de edición. Los HTML y CSS
-originales permanecen intactos.
+GrapesJS open source es el motor visual principal. Administra el canvas, el
+árbol de componentes, la selección, los estilos, los dispositivos y el
+historial de edición. La interfaz anterior permanece accesible temporalmente
+con `?legacy=1` mientras se completa la migración.
 
-GrapesJS queda aplazado hasta que exista una necesidad comprobada de modificar
-la estructura visual. Si se incorpora, será un adaptador reemplazable y no
-formará parte del esquema ni del runtime.
+La siguiente etapa reemplazará el modelo paralelo de identificadores y
+overrides por los datos de proyecto nativos de GrapesJS. La importación y
+exportación de archivos seguirán siendo adaptadores independientes del motor.

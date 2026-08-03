@@ -37,9 +37,10 @@ export function assignStableElementIds(document: Document, pageId: string) {
 
 export function describeSelectableElement(element: HTMLElement) {
   const accessibleName = element.getAttribute('aria-label')?.trim()
+  const alternativeText = element.getAttribute('alt')?.trim()
   const text = element.textContent?.replace(/\s+/g, ' ').trim()
 
-  return accessibleName || text?.slice(0, 80) || `<${element.tagName.toLowerCase()}>`
+  return accessibleName || alternativeText || text?.slice(0, 80) || `<${element.tagName.toLowerCase()}>`
 }
 
 export function findSelectableTarget(target: Element) {

@@ -1,5 +1,9 @@
 import { ProjectSchema } from '../../core/project'
-import type { ProjectConnection, VisualBuilderProject } from '../../core/project'
+import type {
+  NavigationContext,
+  ProjectConnection,
+  VisualBuilderProject,
+} from '../../core/project'
 
 export type ConnectionAction = ProjectConnection['action']
 
@@ -9,6 +13,7 @@ export interface ConnectionDraft {
   sourcePage: string
   targetPage?: string
   url?: string
+  context?: NavigationContext
 }
 
 export interface BrokenConnection {
@@ -55,6 +60,9 @@ export function saveConnection(
     event: 'click',
     action: draft.action,
     ...(draft.action === 'navigate' ? { targetPage: draft.targetPage } : {}),
+    ...(draft.action === 'navigate' && draft.context
+      ? { context: draft.context }
+      : {}),
     ...(draft.action === 'url' ? { url: draft.url } : {}),
   }
 

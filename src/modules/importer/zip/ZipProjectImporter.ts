@@ -45,7 +45,8 @@ function createManifest(files: ProjectFile[]): VisualBuilderProject {
   )
 
   return {
-    version: 1,
+    version: 2,
+    elementOverrides: [],
     name: 'Proyecto importado',
     startPage: preferredStartPage?.id ?? pages[0].id,
     pages: pages.map(({ index: _index, ...page }) => page),

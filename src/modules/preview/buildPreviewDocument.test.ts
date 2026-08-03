@@ -8,7 +8,8 @@ describe('buildPreviewDocument', () => {
   it('removes executable content while keeping responsive CSS', () => {
     const bundle: ProjectBundle = {
       manifest: {
-        version: 1,
+        version: 2,
+        elementOverrides: [],
         name: 'Preview fixture',
         startPage: 'home',
         pages: [{ id: 'home', name: 'Home', file: 'pages/home.html' }],
@@ -41,7 +42,8 @@ describe('buildPreviewDocument', () => {
     const originalImage = new Uint8Array([1, 2, 3])
     const bundle: ProjectBundle = {
       manifest: {
-        version: 1,
+        version: 2,
+        elementOverrides: [],
         name: 'Asset fixture',
         startPage: 'home',
         pages: [{ id: 'home', name: 'Home', file: 'pages/home.html' }],
@@ -70,7 +72,8 @@ describe('buildPreviewDocument', () => {
   it('preserves linked stylesheet order, media queries, fonts, and inline assets', () => {
     const bundle: ProjectBundle = {
       manifest: {
-        version: 1,
+        version: 2,
+        elementOverrides: [],
         name: 'Responsive design export',
         startPage: 'home',
         pages: [{ id: 'home', name: 'Home', file: 'index.html' }],
@@ -106,7 +109,8 @@ describe('buildPreviewDocument', () => {
   it('exposes the same stable identifiers used by the visual selector', () => {
     const bundle: ProjectBundle = {
       manifest: {
-        version: 1,
+        version: 2,
+        elementOverrides: [],
         name: 'Selection fixture',
         startPage: 'home',
         pages: [{ id: 'home', name: 'Home', file: 'pages/home.html' }],
@@ -128,7 +132,8 @@ describe('buildPreviewDocument', () => {
   it('injects the standalone runtime only in test mode', () => {
     const bundle: ProjectBundle = {
       manifest: {
-        version: 1,
+        version: 2,
+        elementOverrides: [],
         name: 'Runtime fixture',
         startPage: 'home',
         pages: [{ id: 'home', name: 'Home', file: 'pages/home.html' }],
@@ -148,5 +153,44 @@ describe('buildPreviewDocument', () => {
     expect(testPreview).toContain('data-psl-config="true"')
     expect(testPreview).toContain('data-psl-runtime="true"')
     expect(testPreview).toContain('psl-navigation-runtime')
+  })
+
+  it('applies static record bindings for the active navigation context', () => {
+    const bundle: ProjectBundle = {
+      manifest: {
+        version: 2,
+        elementOverrides: [],
+        name: 'Bound preview',
+        startPage: 'detail',
+        pages: [{ id: 'detail', name: 'Detail', file: 'detail.html' }],
+        connections: [],
+        dataSources: [{
+          id: 'items',
+          name: 'Items',
+          type: 'static',
+          records: [{ id: 'two', name: 'Second record' }],
+        }],
+        bindings: [{
+          id: 'detail-title',
+          pageId: 'detail',
+          elementId: 'detail::main:1/h1:1',
+          target: 'text',
+          contextKey: 'selectedRecord',
+          field: 'name',
+        }],
+      },
+      files: [{
+        path: 'detail.html',
+        mediaType: 'text/html',
+        bytes: encoder.encode('<html><body><main><h1>Default</h1></main></body></html>'),
+      }],
+    }
+
+    const preview = buildPreviewDocument(bundle, bundle.manifest.pages[0], {
+      context: { selectedRecord: { dataSourceId: 'items', recordId: 'two' } },
+    })
+
+    expect(preview).toContain('Second record')
+    expect(preview).not.toContain('>Default<')
   })
 })

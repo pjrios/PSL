@@ -12,7 +12,8 @@ async function archiveBlob(files: Record<string, string>) {
 describe('validateStaticArchive', () => {
   it('reports missing case-sensitive assets before static hosting', async () => {
     const manifest = {
-      version: 1,
+      version: 2,
+      elementOverrides: [],
       name: 'Broken static fixture',
       startPage: 'index',
       pages: [{ id: 'index', name: 'Home', file: 'index.html' }],

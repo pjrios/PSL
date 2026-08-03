@@ -49,8 +49,52 @@
 - [x] Validar rutas y estructura con el contrato estático de Cloudflare Pages.
 - [ ] Desplegar el ZIP y verificarlo en una URL real de Cloudflare Pages.
 
+## Hito 5 — Edición visual no destructiva
+
+- [x] Migrar `project.json` v1 a v2 durante la importación.
+- [x] Guardar contenido y estilos como overrides sin modificar los archivos originales.
+- [x] Editar texto, imágenes, enlaces, títulos y etiquetas accesibles.
+- [x] Editar propiedades visuales básicas desde el inspector.
+- [x] Configurar estados normal, hover, focus y activo.
+- [x] Configurar overrides de escritorio, tableta y móvil.
+- [x] Deshacer, rehacer y restablecer cambios por elemento.
+- [x] Usar el mismo transformador en preview y exportación.
+- [x] Exportar CSS generado en `psl-runtime/overrides.css`.
+- [ ] Añadir edición estructural: crear, eliminar y reordenar elementos.
+- [ ] Sustituir rutas DOM posicionales por identidades resistentes a cambios estructurales.
+
 ## Después de navegación
 
-Los módulos de autenticación, MediaPipe y Cloudflare se planificarán después de
-cerrar los cuatro hitos anteriores. Cada módulo utilizará el mismo contrato de
-proyecto versionado.
+- [x] Añadir una plantilla de acceso con registro, inicio y cierre de sesión.
+- [x] Guardar y renovar sesiones de Supabase en preview y exportación.
+- [x] Proteger automáticamente todas las páginas salvo la página de acceso.
+- [x] Volver a la página solicitada después de iniciar sesión.
+- [x] Separar la configuración de autenticación de las tablas de datos.
+- [x] Crear colecciones de Supabase mediante un asistente para estudiantes.
+- [x] Ocultar SQL, relaciones e identificadores tras opciones avanzadas.
+- [x] Generar RLS según dos modos simples: lectura pública y datos propios.
+- [x] Comprobar colecciones públicas y autenticadas desde el editor.
+- [x] Conectar elementos y listas repetidas con vocabulario no técnico.
+- [x] Mostrar estados vacíos y errores de carga en listas repetidas.
+- [x] Añadir componentes responsive conectados a tablas mediante un asistente.
+- [x] Sugerir y permitir editar el mapeo de columnas a medios, títulos, descripciones e indicadores.
+- [x] Incluir cuadrícula, carrusel deslizable, lista y detalle destacado reutilizables.
+- [x] Permitir que un campo de medios se muestre como imagen o video.
+- [ ] Añadir y editar filas desde PSL mediante formularios protegidos.
+
+MediaPipe y la publicación directa en Cloudflare se planificarán sobre el mismo
+contrato de proyecto versionado.
+
+## Migración a GrapesJS
+
+- [x] Montar GrapesJS open source como editor predeterminado.
+- [x] Cargar las páginas y estilos del proyecto de demostración.
+- [x] Conservar temporalmente el editor anterior mediante `?legacy=1`.
+- [x] Añadir bloques básicos, formularios, navegación y pestañas.
+- [x] Añadir edición de imágenes, soporte táctil y exportación ZIP.
+- [x] Activar autosave local, assets subidos y cambio de página.
+- [x] Organizar Pages/Layers, Canvas y Styles/Properties en un workspace fijo.
+- [x] Mover Blocks y acciones secundarias a drawer y menú temporal.
+- [ ] Sustituir el modelo de overrides por datos de proyecto de GrapesJS.
+- [ ] Conectar importación y exportación genéricas.
+- [ ] Simplificar progresivamente los paneles nativos para usuarios no técnicos.

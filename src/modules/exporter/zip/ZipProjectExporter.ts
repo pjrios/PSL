@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import type { ProjectBundle, ProjectPage } from '../../../core/project'
+import { applyContentOverrides, createOverrideCss } from '../../design'
 import {
   createNavigationConfigSource,
   createNavigationRuntimeSource,
@@ -9,6 +10,7 @@ import { relativeProjectPath } from './path-utils'
 
 const textDecoder = new TextDecoder()
 const runtimePath = 'psl-runtime/navigation.js'
+const overridesPath = 'psl-runtime/overrides.css'
 
 function bytesToBase64(bytes: Uint8Array) {
   let binary = ''
@@ -27,7 +29,17 @@ function injectNavigationRuntime(
   page: ProjectPage,
 ) {
   const document = new DOMParser().parseFromString(markup, 'text/html')
-  document.querySelectorAll('[data-psl-config], [data-psl-runtime]').forEach((node) => node.remove())
+  document.querySelectorAll('[data-psl-config], [data-psl-runtime], [data-psl-overrides]')
+    .forEach((node) => node.remove())
+  applyContentOverrides(document, bundle.manifest, page.id)
+
+  if (createOverrideCss(bundle.manifest)) {
+    const stylesheet = document.createElement('link')
+    stylesheet.dataset.pslOverrides = 'true'
+    stylesheet.rel = 'stylesheet'
+    stylesheet.href = relativeProjectPath(page.file, overridesPath)
+    document.head.append(stylesheet)
+  }
 
   const configScript = document.createElement('script')
   configScript.dataset.pslConfig = 'true'
@@ -39,6 +51,18 @@ function injectNavigationRuntime(
       relativeProjectPath(page.file, target.file),
     ])),
     transport: 'location',
+    dataSources: bundle.manifest.dataSources,
+    bindings: bundle.manifest.bindings,
+    repeaters: bundle.manifest.repeaters,
+    authentication: bundle.manifest.authentication,
+    pageAccess: Object.fromEntries(bundle.manifest.pages.map((target) => [
+      target.id,
+      target.access ?? (bundle.manifest.authentication
+        ? target.id === bundle.manifest.authentication.loginPage
+          ? 'guestOnly'
+          : 'authenticated'
+        : 'public'),
+    ])),
   })
 
   const runtimeScript = document.createElement('script')
@@ -83,7 +107,7 @@ export class ZipProjectExporter implements ProjectExporter {
     const pagesByFile = new Map(bundle.manifest.pages.map((page) => [page.file, page]))
 
     for (const file of bundle.files) {
-      if (file.path === 'project.json' || file.path === runtimePath) {
+      if (file.path === 'project.json' || file.path === runtimePath || file.path === overridesPath) {
         continue
       }
 
@@ -99,6 +123,8 @@ export class ZipProjectExporter implements ProjectExporter {
 
     archive.file('project.json', JSON.stringify(bundle.manifest, null, 2))
     archive.file(runtimePath, createNavigationRuntimeSource())
+    const overrideCss = createOverrideCss(bundle.manifest)
+    if (overrideCss) archive.file(overridesPath, overrideCss)
     if (!pagesByFile.has('index.html')) {
       archive.file('index.html', startPageDocument(bundle))
     }

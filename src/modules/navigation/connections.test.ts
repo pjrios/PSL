@@ -3,7 +3,8 @@ import type { VisualBuilderProject } from '../../core/project'
 import { deleteConnection, findBrokenConnections, saveConnection } from './connections'
 
 const project: VisualBuilderProject = {
-  version: 1,
+  version: 2,
+  elementOverrides: [],
   name: 'Navigation fixture',
   startPage: 'home',
   pages: [

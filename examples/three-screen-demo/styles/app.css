@@ -141,16 +141,12 @@ h2 {
 }
 
 .hand-visual {
-  display: grid;
   width: min(260px, 80%);
   aspect-ratio: 1;
-  place-items: center;
-  color: #133f47;
   background: #72d8cb;
   border: 14px solid rgba(255, 255, 255, 0.14);
   border-radius: 50%;
-  font-size: 4rem;
-  font-weight: 900;
+  object-fit: cover;
 }
 
 .section-heading {
