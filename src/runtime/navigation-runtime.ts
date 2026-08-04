@@ -127,6 +127,7 @@ export function installNavigationRuntime(
     ? `psl-auth:${new URL(authProject.projectUrl).hostname}`
     : 'psl-auth'
   const authReturnStorageKey = `${authStorageKey}:return-page`
+  const practiceVideoBucket = 'practice-reference-videos'
 
   function storedSession() {
     try {
@@ -210,6 +211,50 @@ export function installNavigationRuntime(
   }
 
   const authSessionPromise = authProject ? loadAuthSession() : Promise.resolve(undefined)
+  const roleVisibleElements = [...runtimeDocument.querySelectorAll<HTMLElement>(
+    '[data-psl-role-visible]',
+  )]
+  roleVisibleElements.forEach((element) => {
+    element.hidden = true
+  })
+
+  async function currentUserRoles() {
+    if (!roleVisibleElements.length) return new Set<string>()
+    const session = await authSessionPromise
+    if (!session) return new Set<string>()
+    const source = runtimeConfig.dataSources?.find((candidate) =>
+      candidate.name === 'user_roles'
+      || (candidate.type === 'supabase' && candidate.table === 'user_roles'))
+    if (!source) return new Set<string>()
+    if (source.type === 'static') {
+      return new Set(source.records.flatMap((record) =>
+        typeof record.role === 'string' ? [record.role] : []))
+    }
+    if (source.type !== 'supabase') return new Set<string>()
+    try {
+      const request = dataRequest(source, undefined, session)
+      if (!request) return new Set<string>()
+      const response = await runtimeWindow.fetch(request.url, request.options)
+      if (!response.ok) return new Set<string>()
+      const result = await response.json() as unknown
+      if (!Array.isArray(result)) return new Set<string>()
+      return new Set(result.flatMap((record) => {
+        if (!record || typeof record !== 'object') return []
+        const role = (record as Record<string, unknown>).role
+        return typeof role === 'string' ? [role] : []
+      }))
+    } catch {
+      return new Set<string>()
+    }
+  }
+
+  async function applyRoleVisibility() {
+    const roles = await currentUserRoles()
+    roleVisibleElements.forEach((element) => {
+      const expected = element.dataset.pslRoleVisible
+      element.hidden = !expected || !roles.has(expected)
+    })
+  }
 
   function storedReturnPage() {
     try {
@@ -280,6 +325,7 @@ export function installNavigationRuntime(
     recordId?: string,
     session?: AuthSession,
     range?: { limit: number; offset: number },
+    query?: { userFilterColumn?: string; includeUnpublished?: boolean },
   ) {
     if (source.type !== 'supabase') return null
     const url = new URL(
@@ -287,9 +333,12 @@ export function installNavigationRuntime(
     )
     url.searchParams.set('select', '*')
     if (recordId !== undefined) url.searchParams.set('id', `eq.${recordId}`)
-    if (source.publishedOnly) url.searchParams.set('published', 'eq.true')
+    if (source.publishedOnly && !query?.includeUnpublished) url.searchParams.set('published', 'eq.true')
+    if (query?.userFilterColumn && session?.user?.id) {
+      url.searchParams.set(query.userFilterColumn, `eq.${session.user.id}`)
+    }
     if (source.orderColumn && recordId === undefined) {
-      url.searchParams.set('order', `${source.orderColumn}.asc`)
+      url.searchParams.set('order', `${source.orderColumn}.${source.orderDirection ?? 'asc'}`)
     }
     if (range && recordId === undefined) {
       url.searchParams.set('limit', String(range.limit))
@@ -321,12 +370,13 @@ export function installNavigationRuntime(
       return source.records.find((record) => record.id === reference.recordId)
     }
     try {
-      const session = source.type === 'supabase' && source.requiresAuth
+      const session = source.type === 'supabase'
         ? await authSessionPromise
         : undefined
       if (source.type === 'supabase' && source.requiresAuth && !session) return undefined
       const request = source.type === 'supabase'
-        ? dataRequest(source, reference.recordId, session)
+        ? dataRequest(source, reference.recordId, session, undefined,
+            session ? { includeUnpublished: true } : undefined)
         : null
       const response = source.type === 'supabase'
         ? await runtimeWindow.fetch(request!.url, request!.options)
@@ -348,7 +398,11 @@ export function installNavigationRuntime(
 
   const dataSourceErrors = new Set<string>()
 
-  async function resolveRecords(dataSourceId: string, range?: { limit: number; offset: number }) {
+  async function resolveRecords(
+    dataSourceId: string,
+    range?: { limit: number; offset: number },
+    query?: { userFilterColumn?: string; includeUnpublished?: boolean },
+  ) {
     const source = runtimeConfig.dataSources?.find((candidate) => candidate.id === dataSourceId)
     if (!source) {
       dataSourceErrors.add(dataSourceId)
@@ -359,14 +413,16 @@ export function installNavigationRuntime(
     }
     if (source.type === 'rest' && !source.listUrl) return []
     try {
-      const session = source.type === 'supabase' && source.requiresAuth
+      const session = source.type === 'supabase' && (source.requiresAuth || query?.userFilterColumn)
         ? await authSessionPromise
         : undefined
-      if (source.type === 'supabase' && source.requiresAuth && !session) {
+      if (source.type === 'supabase' && (source.requiresAuth || query?.userFilterColumn) && !session) {
         dataSourceErrors.add(dataSourceId)
         return []
       }
-      const request = source.type === 'supabase' ? dataRequest(source, undefined, session, range) : null
+      const request = source.type === 'supabase'
+        ? dataRequest(source, undefined, session, range, query)
+        : null
       const response = source.type === 'supabase'
         ? await runtimeWindow.fetch(request!.url, request!.options)
         : await runtimeWindow.fetch(source.listUrl!)
@@ -404,19 +460,51 @@ export function installNavigationRuntime(
     return true
   }
 
-  function applyBinding(element: HTMLElement, binding: DataBinding, value: string) {
+  async function resolvedBindingMediaUrl(binding: DataBinding, value: string) {
+    if (/^https?:\/\//i.test(value)) return value
+    const storageMatch = /^storage:\/\/([^/]+)\/(.+)$/i.exec(value)
+    if (!storageMatch || !binding.dataSourceId) return undefined
+    const source = runtimeConfig.dataSources?.find((candidate) => candidate.id === binding.dataSourceId)
+    if (!source || source.type !== 'supabase') return undefined
+    const session = await authSessionPromise
+    const encodedPath = storageMatch[2].split('/').map((segment) => encodeURIComponent(segment)).join('/')
+    const response = await runtimeWindow.fetch(
+      `${source.projectUrl.replace(/\/$/, '')}/storage/v1/object/sign/${encodeURIComponent(storageMatch[1])}/${encodedPath}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: source.publishableKey,
+          Authorization: `Bearer ${session?.access_token ?? source.publishableKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn: 3_600 }),
+      },
+    )
+    if (!response.ok) return undefined
+    const result = await response.json().catch(() => ({})) as Record<string, unknown>
+    const signedPath = result.signedURL ?? result.signedUrl
+    if (typeof signedPath !== 'string') return undefined
+    return /^https?:\/\//i.test(signedPath)
+      ? signedPath
+      : `${source.projectUrl.replace(/\/$/, '')}/storage/v1${signedPath.startsWith('/') ? '' : '/'}${signedPath}`
+  }
+
+  async function applyBinding(element: HTMLElement, binding: DataBinding, value: string) {
     if (binding.target === 'text') element.textContent = value
     else if (binding.target === 'value' && 'value' in element) {
       (element as HTMLInputElement).value = value
     } else if (binding.target === 'ariaLabel') element.setAttribute('aria-label', value)
     else if (binding.target === 'src' || binding.target === 'href') {
-      if (safeUrl(value, binding.target)) element.setAttribute(binding.target, value)
+      const resolvedMedia = binding.target === 'src' ? await resolvedBindingMediaUrl(binding, value) : undefined
+      if (binding.target === 'src' && /^storage:\/\//i.test(value) && !resolvedMedia) return
+      const resolvedValue = resolvedMedia ?? value
+      if (safeUrl(resolvedValue, binding.target)) element.setAttribute(binding.target, resolvedValue)
     } else {
       element.setAttribute(binding.target, value)
     }
   }
 
-  function applyRecordToRoot(root: HTMLElement, contextKey: string, record: unknown) {
+  async function applyRecordToRoot(root: HTMLElement, contextKey: string, record: unknown) {
     const candidates = [root, ...root.querySelectorAll<HTMLElement>('[data-psl-element-id]')]
     for (const binding of runtimeConfig.bindings ?? []) {
       if (binding.pageId !== runtimeConfig.currentPage || binding.contextKey !== contextKey) continue
@@ -424,7 +512,7 @@ export function installNavigationRuntime(
         candidate.dataset.pslElementId === binding.elementId)
       const rawValue = fieldValue(record, binding.field) ?? binding.fallback
       if (element && rawValue !== undefined && rawValue !== null) {
-        applyBinding(element, binding, String(rawValue))
+        await applyBinding(element, binding, String(rawValue))
       }
     }
   }
@@ -462,9 +550,14 @@ export function installNavigationRuntime(
         next.disabled = true
         const offset = pageSize ? currentPage * pageSize : 0
         const requestedLimit = pageSize ? pageSize + (usesPagination ? 1 : 0) : undefined
-        const records = await resolveRecords(repeater.dataSourceId, requestedLimit
-          ? { limit: requestedLimit, offset }
-          : undefined)
+        const records = await resolveRecords(
+          repeater.dataSourceId,
+          requestedLimit ? { limit: requestedLimit, offset } : undefined,
+          {
+            userFilterColumn: repeater.userFilterColumn,
+            includeUnpublished: repeater.includeUnpublished,
+          },
+        )
         runtimeDocument.querySelectorAll<HTMLElement>('[data-psl-repeater-instance]')
           .forEach((element) => {
             if (element.dataset.pslRepeaterInstance === repeater.id) element.remove()
@@ -478,22 +571,24 @@ export function installNavigationRuntime(
           status.dataset.pslDataStatus = hasError ? 'error' : 'empty'
           status.setAttribute('role', hasError ? 'alert' : 'status')
           status.textContent = hasError
-              ? 'No se pudo cargar esta información.'
-            : currentPage > 0 ? 'No hay más elementos para mostrar.' : 'Todavía no hay elementos para mostrar.'
+            ? repeater.errorMessage ?? 'No se pudo cargar esta información.'
+            : currentPage > 0
+              ? 'No hay más elementos para mostrar.'
+              : repeater.emptyMessage ?? 'Todavía no hay elementos para mostrar.'
           status.style.cssText = 'grid-column:1/-1;padding:1rem;text-align:center;opacity:.8;border:1px dashed currentColor;border-radius:.5rem'
           anchor.parentNode?.insertBefore(status, anchor)
         } else {
-          visibleRecords.forEach((record) => {
-            if (!record || typeof record !== 'object') return
+          for (const record of visibleRecords) {
+            if (!record || typeof record !== 'object') continue
             const recordId = (record as Record<string, unknown>).id
-            if (typeof recordId !== 'string' && typeof recordId !== 'number') return
+            if (typeof recordId !== 'string' && typeof recordId !== 'number') continue
             const clone = template.cloneNode(true) as HTMLElement
             clone.dataset.pslRepeaterInstance = repeater.id
             clone.dataset.pslRecordId = String(recordId)
             clone.dataset.pslDataSourceId = repeater.dataSourceId
-            applyRecordToRoot(clone, repeater.itemContext, record)
+            await applyRecordToRoot(clone, repeater.itemContext, record)
             anchor.parentNode?.insertBefore(clone, anchor)
-          })
+          }
         }
         if (usesPagination) {
           pageLabel.textContent = `Página ${currentPage + 1}`
@@ -503,6 +598,9 @@ export function installNavigationRuntime(
           if (!controls.isConnected && repeaterHost?.parentNode) {
             repeaterHost.parentNode.insertBefore(controls, repeaterHost.nextSibling)
           }
+        }
+        if (repeaterHost?.classList.contains('psl-data-carousel')) {
+          repeaterHost.scrollLeft = 0
         }
       }
       previous.addEventListener('click', () => {
@@ -536,11 +634,12 @@ export function installNavigationRuntime(
       }
       if (!recordPromise) continue
       const record = await recordPromise
+      if (binding.dataSourceId) applyMutationFormRecord(binding.dataSourceId, record)
       const rawValue = fieldValue(record, binding.field) ?? binding.fallback
       if (rawValue === undefined || rawValue === null) continue
       const element = [...runtimeDocument.querySelectorAll<HTMLElement>('[data-psl-element-id]')]
         .find((candidate) => candidate.dataset.pslElementId === binding.elementId)
-      if (element) applyBinding(element, binding, String(rawValue))
+      if (element) await applyBinding(element, binding, String(rawValue))
     }
   }
 
@@ -552,6 +651,345 @@ export function installNavigationRuntime(
   }
 
   const authDisposers: Array<() => void> = []
+  const mutationDisposers: Array<() => void> = []
+  const wizardDisposers: Array<() => void> = []
+
+  function setMutationStatus(root: Element, message: string, isError = false) {
+    const status = root.querySelector<HTMLElement>('[data-psl-mutation-status]')
+    if (!status) return
+    status.textContent = message
+    status.setAttribute('role', isError ? 'alert' : 'status')
+  }
+
+  function installPracticeWizards() {
+    runtimeDocument.querySelectorAll<HTMLFormElement>('form[data-practice-wizard]')
+      .forEach((form) => {
+        const details = form.querySelector<HTMLElement>('[data-practice-step="details"]')
+        const reference = form.querySelector<HTMLElement>('[data-practice-step="reference"]')
+        const next = form.querySelector<HTMLButtonElement>('[data-practice-next]')
+        const label = runtimeDocument.querySelector<HTMLElement>('[data-practice-step-label]')
+        const pageHeader = runtimeDocument.querySelector<HTMLElement>('.create-editor-header')
+        if (!details || !reference || !next) return
+
+        const showStep = (step: 'details' | 'reference', moveFocus = true) => {
+          const showingDetails = step === 'details'
+          details.hidden = !showingDetails
+          reference.hidden = showingDetails
+          if (pageHeader) pageHeader.hidden = !showingDetails
+          details.setAttribute('aria-hidden', String(!showingDetails))
+          reference.setAttribute('aria-hidden', String(showingDetails))
+          if (label) label.textContent = showingDetails
+            ? 'Paso 1 de 2 · Información'
+            : 'Paso 2 de 2 · Referencia'
+          if (!moveFocus) return
+          if (showingDetails) {
+            form.querySelector<HTMLInputElement>('#practice-title')?.focus()
+          } else {
+            reference.querySelector<HTMLElement>('h2')?.focus()
+          }
+        }
+        const continueToReference = () => {
+          const fields = [...details.querySelectorAll<
+            HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+          >('input,select,textarea')]
+          const invalid = fields.find((field) => !field.checkValidity())
+          if (invalid) {
+            invalid.reportValidity()
+            invalid.focus()
+            return
+          }
+          showStep('reference')
+        }
+        next.addEventListener('click', continueToReference)
+        wizardDisposers.push(() => next.removeEventListener('click', continueToReference))
+        showStep('details', false)
+      })
+  }
+
+  function encodedStoragePath(path: string) {
+    return path.split('/').map((segment) => encodeURIComponent(segment)).join('/')
+  }
+
+  async function uploadPracticeReferenceVideo(
+    source: Extract<DataSource, { type: 'supabase' }>,
+    session: AuthSession,
+    userId: string,
+    practiceId: string,
+    file: File,
+  ) {
+    const allowedTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
+    const mediaType = file.type.toLowerCase().split(';', 1)[0].trim()
+    if (!allowedTypes.has(mediaType)) {
+      throw new Error('Selecciona un video MP4, WebM o MOV.')
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      throw new Error('El video supera el límite de 100 MB.')
+    }
+    const objectPath = `${userId}/${practiceId}/reference`
+    const response = await runtimeWindow.fetch(
+      `${source.projectUrl.replace(/\/$/, '')}/storage/v1/object/${encodeURIComponent(practiceVideoBucket)}/${encodedStoragePath(objectPath)}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: source.publishableKey,
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': mediaType,
+          'x-upsert': 'true',
+        },
+        body: file,
+      },
+    )
+    const result = await response.json().catch(() => ({})) as Record<string, unknown>
+    if (!response.ok) {
+      const detail = result.message ?? result.error
+      throw new Error(typeof detail === 'string'
+        ? `No se pudo subir el video: ${detail}`
+        : 'No se pudo subir el video de referencia.')
+    }
+    return `storage://${practiceVideoBucket}/${objectPath}`
+  }
+
+  async function updatePracticeMediaUrl(
+    source: Extract<DataSource, { type: 'supabase' }>,
+    session: AuthSession,
+    practiceId: string,
+    mediaUrl: string,
+  ) {
+    const url = new URL(
+      `${source.projectUrl.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(source.table)}`,
+    )
+    url.searchParams.set('id', `eq.${practiceId}`)
+    url.searchParams.set('select', '*')
+    const response = await runtimeWindow.fetch(url.href, {
+      method: 'PATCH',
+      headers: {
+        apikey: source.publishableKey,
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify({ media_url: mediaUrl }),
+    })
+    const result = await response.json().catch(() => []) as unknown
+    if (!response.ok) throw new Error('El video subió, pero no se pudo asociar con la práctica.')
+    const updated = Array.isArray(result) ? result[0] : result
+    if (!updated || typeof updated !== 'object') {
+      throw new Error('El video subió, pero Supabase no devolvió la práctica actualizada.')
+    }
+    return updated
+  }
+
+  function applyMutationFormRecord(dataSourceId: string, record: unknown) {
+    if (!record || typeof record !== 'object') return
+    const source = runtimeConfig.dataSources?.find((candidate) => candidate.id === dataSourceId)
+    if (!source) return
+    runtimeDocument.querySelectorAll<HTMLFormElement>('form[data-psl-mutation-source]')
+      .forEach((form) => {
+        const sourceKey = form.dataset.pslMutationSource
+        const matches = source.id === sourceKey
+          || source.name === sourceKey
+          || (source.type === 'supabase' && source.table === sourceKey)
+        if (!matches) return
+        form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+          '[data-psl-mutation-field][name]',
+        ).forEach((field) => {
+          const value = fieldValue(record, field.name)
+          if (value === undefined || value === null) return
+          if (field instanceof HTMLInputElement && field.type === 'checkbox') {
+            field.checked = Boolean(value)
+          } else if (field.dataset.pslMutationType === 'json' && typeof value === 'object') {
+            field.value = JSON.stringify(value)
+          } else {
+            field.value = String(value)
+          }
+          field.dispatchEvent(new Event('input', { bubbles: true }))
+          field.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        const requiredTemplate = form.querySelector<HTMLInputElement>('[data-motion-template-field]')
+        if (requiredTemplate?.value.trim()) {
+          setMutationStatus(form, 'Práctica y referencia existentes cargadas.')
+        }
+      })
+  }
+
+  async function applySourceRecord(dataSourceId: string, record: unknown) {
+    if (!record || typeof record !== 'object') return
+    applyMutationFormRecord(dataSourceId, record)
+    const elements = [...runtimeDocument.querySelectorAll<HTMLElement>('[data-psl-element-id]')]
+    for (const binding of runtimeConfig.bindings ?? []) {
+      if (binding.pageId !== runtimeConfig.currentPage
+        || binding.dataSourceId !== dataSourceId) continue
+      const rawValue = fieldValue(record, binding.field) ?? binding.fallback
+      if (rawValue === undefined || rawValue === null) continue
+      const element = elements.find((candidate) =>
+        candidate.dataset.pslElementId === binding.elementId)
+      if (element) await applyBinding(element, binding, String(rawValue))
+    }
+  }
+
+  function installDataMutations() {
+    runtimeDocument.querySelectorAll<HTMLFormElement>('form[data-psl-mutation-source]')
+      .forEach((form) => {
+        const formContextKey = form.dataset.pslMutationContext ?? 'record'
+        const editingContext = form.dataset.pslMutationMode === 'context'
+          ? activeContext[formContextKey]
+          : undefined
+        if (editingContext) {
+          const mode = runtimeDocument.querySelector<HTMLElement>('[data-psl-editor-mode]')
+          const title = runtimeDocument.querySelector<HTMLElement>('[data-psl-editor-title]')
+          const description = runtimeDocument.querySelector<HTMLElement>('[data-psl-editor-description]')
+          if (mode) mode.textContent = 'Editar'
+          if (title) title.textContent = 'Editar práctica'
+          if (description) description.textContent = 'Actualiza la información o la referencia de movimiento.'
+        }
+        const submit = async (event: Event) => {
+          event.preventDefault()
+          const sourceKey = form.dataset.pslMutationSource
+          const source = runtimeConfig.dataSources?.find((candidate) =>
+            candidate.id === sourceKey
+              || candidate.name === sourceKey
+              || (candidate.type === 'supabase' && candidate.table === sourceKey))
+          if (!source || source.type !== 'supabase') {
+            setMutationStatus(form, 'No se encontró la colección para guardar el perfil.', true)
+            return
+          }
+          const filterField = form.dataset.pslMutationFilter
+          const requestedMode = form.dataset.pslMutationMode
+          const contextKey = form.dataset.pslMutationContext ?? 'record'
+          const contextRecord = activeContext[contextKey]
+          const mutationMode = requestedMode === 'insert'
+            || (requestedMode === 'context' && !contextRecord)
+            ? 'insert'
+            : 'update'
+          const session = await authSessionPromise
+          const userId = session?.user && typeof session.user.id === 'string'
+            ? session.user.id
+            : undefined
+          const filterValue = requestedMode === 'context'
+            ? contextRecord?.recordId
+            : userId
+          if (!session || !userId
+            || (mutationMode === 'update' && (!filterField || !filterValue))) {
+            setMutationStatus(form, 'Tu sesión ya no está disponible. Vuelve a iniciar sesión.', true)
+            return
+          }
+          const requiredTemplate = form.querySelector<HTMLInputElement>('[data-motion-template-field]')
+          if (requiredTemplate && !requiredTemplate.value.trim()) {
+            setMutationStatus(form, 'Graba y detén la referencia de movimiento antes de guardar.', true)
+            return
+          }
+          const fields = [...form.querySelectorAll<
+            HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+          >('[data-psl-mutation-field][name]')]
+          const parseValue = (field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) => {
+            const value = field.value.trim()
+            if (!value) return null
+            if (field.dataset.pslMutationType === 'json') return JSON.parse(value) as unknown
+            if (field.dataset.pslMutationType === 'boolean') return value === 'true'
+            if (field.dataset.pslMutationType === 'number'
+              || (field instanceof HTMLInputElement && field.type === 'number')) return Number(value)
+            return value
+          }
+          const values: Record<string, unknown> = Object.fromEntries(fields.flatMap((field) => {
+            if (field instanceof HTMLInputElement
+              && (field.type === 'checkbox' || field.type === 'radio')
+              && !field.checked) return []
+            return [[field.name, parseValue(field)]]
+          }))
+          const submitter = event instanceof SubmitEvent
+            ? event.submitter as HTMLButtonElement | HTMLInputElement | null
+            : null
+          if (submitter?.name) {
+            values[submitter.name] = submitter.dataset.pslMutationType === 'boolean'
+              ? submitter.value === 'true'
+              : submitter.value
+          }
+          const ownerField = form.dataset.pslMutationOwnerField
+          if (mutationMode === 'insert' && ownerField) values[ownerField] = userId
+          const videoInput = runtimeDocument.querySelector<HTMLInputElement & {
+            __motionReferenceClip?: File
+          }>('[data-motion-file]')
+          const selectedVideo = videoInput?.files?.[0]
+          const preparedReferenceClip = videoInput?.__motionReferenceClip
+          if (selectedVideo && source.table === 'practices' && !preparedReferenceClip) {
+            setMutationStatus(form, 'Analiza nuevamente el tramo del video antes de guardar.', true)
+            return
+          }
+          if (!Object.keys(values).length) {
+            setMutationStatus(form, 'No hay cambios para guardar.', true)
+            return
+          }
+          const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]')
+          if (submitButton) submitButton.disabled = true
+          setMutationStatus(form, form.dataset.pslMutationPending
+            ?? (mutationMode === 'insert' ? 'Guardando práctica…' : 'Guardando perfil…'))
+          try {
+            const url = new URL(
+              `${source.projectUrl.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(source.table)}`,
+            )
+            if (mutationMode === 'update' && filterField) {
+              url.searchParams.set(filterField, `eq.${filterValue}`)
+            }
+            url.searchParams.set('select', '*')
+            const response = await runtimeWindow.fetch(url.href, {
+              method: mutationMode === 'insert' ? 'POST' : 'PATCH',
+              headers: {
+                apikey: source.publishableKey,
+                Authorization: `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+                Prefer: 'return=representation',
+              },
+              body: JSON.stringify(values),
+            })
+            const result = await response.json().catch(() => []) as unknown
+            if (!response.ok) {
+              const object = result && typeof result === 'object'
+                ? result as Record<string, unknown>
+                : undefined
+              const detail = object?.message ?? object?.details ?? object?.hint
+              throw new Error(typeof detail === 'string'
+                ? detail
+                : 'Supabase no pudo guardar el perfil.')
+            }
+            let updated = Array.isArray(result) ? result[0] : result
+            if (!updated || typeof updated !== 'object') {
+              throw new Error('No se encontró el perfil de tu cuenta.')
+            }
+            if (selectedVideo && source.table === 'practices') {
+              const practiceId = (updated as Record<string, unknown>).id
+              if (typeof practiceId !== 'string') {
+                throw new Error('Supabase no devolvió el identificador de la práctica.')
+              }
+              setMutationStatus(form, 'Subiendo solamente el tramo seleccionado…')
+              const mediaUrl = await uploadPracticeReferenceVideo(
+                source,
+                session,
+                userId,
+                practiceId,
+                preparedReferenceClip!,
+              )
+              updated = await updatePracticeMediaUrl(source, session, practiceId, mediaUrl)
+            }
+            await applySourceRecord(source.id, updated)
+            setMutationStatus(form, form.dataset.pslMutationSuccess
+              ?? (mutationMode === 'insert'
+                ? 'Práctica guardada correctamente.'
+                : 'Perfil guardado correctamente.'))
+          } catch (error) {
+            setMutationStatus(form,
+              error instanceof Error
+                ? error.message
+                : mutationMode === 'insert'
+                  ? 'No se pudo guardar la práctica.'
+                  : 'No se pudo guardar el perfil.', true)
+          } finally {
+            if (submitButton) submitButton.disabled = false
+          }
+        }
+        form.addEventListener('submit', submit)
+        mutationDisposers.push(() => form.removeEventListener('submit', submit))
+      })
+  }
 
   function installAuthControls() {
     runtimeDocument.querySelectorAll<HTMLElement>('[data-psl-auth-tab]')
@@ -590,9 +1028,24 @@ export function installNavigationRuntime(
           }
           setAuthStatus(form, action === 'login' ? 'Iniciando sesión…' : 'Creando cuenta…')
           try {
+            const metadata = Object.fromEntries(
+              [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+                '[data-psl-auth-metadata][name]',
+              )].flatMap((field) => {
+                if (field instanceof HTMLInputElement
+                  && (field.type === 'radio' || field.type === 'checkbox')
+                  && !field.checked) return []
+                const value = field.value.trim()
+                return field.name && value ? [[field.name, value]] : []
+              }),
+            )
             const result = await authRequest(
               action === 'login' ? 'token?grant_type=password' : 'signup',
-              { email, password },
+              {
+                email,
+                password,
+                ...(action === 'signup' && Object.keys(metadata).length ? { data: metadata } : {}),
+              },
             )
             const session = normalizedSession(result)
             if (!session) {
@@ -673,7 +1126,9 @@ export function installNavigationRuntime(
   }
 
   function execute(connection: NavigationRuntimeConnection, sourceElement?: Element | null) {
-    const context = resolvedConnectionContext(connection, sourceElement)
+    // Keep the selected record while a multi-page activity advances. A later
+    // connection may add or replace context keys without losing the rest.
+    const context = { ...activeContext, ...resolvedConnectionContext(connection, sourceElement) }
     if (runtimeConfig.transport === 'message') {
       sendMessage(connection, context)
       return
@@ -726,13 +1181,19 @@ export function installNavigationRuntime(
 
   runtimeDocument.addEventListener('click', handleClick, true)
   installAuthControls()
+  installPracticeWizards()
+  installDataMutations()
   void applyAuthPageGuard().then((allowed) => {
-    if (allowed) return applyRepeaters().then(() => applyDataBindings())
+    if (allowed) return applyRoleVisibility()
+      .then(() => applyRepeaters())
+      .then(() => applyDataBindings())
     return undefined
   })
   return () => {
     runtimeDocument.removeEventListener('click', handleClick, true)
     authDisposers.forEach((dispose) => dispose())
+    mutationDisposers.forEach((dispose) => dispose())
+    wizardDisposers.forEach((dispose) => dispose())
   }
 }
 

@@ -121,6 +121,17 @@ export async function validateStaticArchive(source: Blob): Promise<StaticArchive
     if (!document.querySelector('[data-psl-runtime]')) {
       errors.push(`${page.file} no carga el runtime de navegación.`)
     }
+    if (manifest.motionActivities?.some((activity) => activity.pageId === page.id)) {
+      if (!filePaths.has('motion-runtime/analysis.js')) {
+        errors.push('Falta el runtime de análisis de movimiento.')
+      }
+      if (!document.querySelector('[data-motion-config]')) {
+        errors.push(`${page.file} no contiene la configuración de movimiento.`)
+      }
+      if (!document.querySelector('[data-motion-runtime]')) {
+        errors.push(`${page.file} no carga el runtime de movimiento.`)
+      }
+    }
 
     for (const reference of references) {
       const path = resolveArchivePath(reference, page.file)

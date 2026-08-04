@@ -15,7 +15,7 @@ body { margin: 0; }
 
 .screen {
   width: min(1120px, calc(100% - 48px));
-  min-height: 100vh;
+  min-height: var(--psl-editor-viewport-height, 100vh);
   margin: auto;
   padding: 72px 0;
 }

@@ -3,6 +3,25 @@ import { describe, expect, it, vi } from 'vitest'
 import { PageImportDialog } from './PageImportDialog'
 
 describe('PageImportDialog', () => {
+  it('starts with one chooser for all three import workflows', () => {
+    render(<PageImportDialog onClose={vi.fn()} onImport={vi.fn()} />)
+
+    expect(screen.getByRole('dialog', { name: 'Importar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Importar una página/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Importar varias páginas/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Importar plantilla ZIP/ })).toBeInTheDocument()
+  })
+
+  it('opens a workflow from the chooser and can return to the options', () => {
+    render(<PageImportDialog onClose={vi.fn()} onImport={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Importar plantilla ZIP/ }))
+    expect(screen.getByRole('dialog', { name: 'Importar plantilla ZIP' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Atrás' }))
+    expect(screen.getByRole('dialog', { name: 'Importar' })).toBeInTheDocument()
+  })
+
   it('submits pasted FigmaToCode HTML as one page', () => {
     const onImport = vi.fn()
     render(<PageImportDialog mode="single" onClose={vi.fn()} onImport={onImport} />)

@@ -30,3 +30,15 @@ where user_id = auth.uid()
 order by created_at desc
 limit 3;
 ```
+
+## Datos de prueba
+
+Después de instalar el esquema, ejecuta `psl-test-data.sql` en **Supabase →
+SQL Editor**. El archivo agrega tres cuentas ficticias sin contraseña, ocho
+prácticas adicionales, historiales de intentos, progreso, favoritos y contenido
+creado por una docente. Se puede ejecutar más de una vez sin duplicar filas.
+
+Las cuentas de prueba no pueden iniciar sesión. Para comprobar las políticas RLS
+desde la aplicación, crea usuarios con contraseña desde **Authentication →
+Users** o mediante la API administrativa y utiliza sus UUID en una copia local
+del archivo de datos.

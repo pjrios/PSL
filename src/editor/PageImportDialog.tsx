@@ -11,9 +11,24 @@ import type { ImportedPageDraft } from './page-import'
 export type PageImportMode = 'single' | 'multiple' | 'zip'
 
 interface PageImportDialogProps {
-  mode: PageImportMode
+  mode?: PageImportMode
   onClose: () => void
   onImport: (pages: ImportedPageDraft[]) => void
+}
+
+const importModeCopy: Record<PageImportMode, { title: string; description: string }> = {
+  single: {
+    title: 'Importar una página',
+    description: 'Pega HTML de FigmaToCode o carga HTML, CSS y recursos.',
+  },
+  multiple: {
+    title: 'Importar varias páginas',
+    description: 'Cada archivo HTML se convertirá en una página independiente.',
+  },
+  zip: {
+    title: 'Importar plantilla ZIP',
+    description: 'Carga una plantilla con HTML, CSS, imágenes y fuentes organizados en carpetas.',
+  },
 }
 
 function isHtml(file: File) {
@@ -58,13 +73,20 @@ async function selectedFilesAsDrafts(files: File[]) {
   }))
 }
 
-export function PageImportDialog({ mode, onClose, onImport }: PageImportDialogProps) {
+export function PageImportDialog({ mode: initialMode, onClose, onImport }: PageImportDialogProps) {
+  const [mode, setMode] = useState<PageImportMode | null>(initialMode ?? null)
   const [name, setName] = useState('Página importada')
   const [html, setHtml] = useState('')
   const [css, setCss] = useState('')
   const [multipleDrafts, setMultipleDrafts] = useState<ImportedPageDraft[]>([])
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+
+  function selectMode(nextMode: PageImportMode | null) {
+    setMode(nextMode)
+    setMultipleDrafts([])
+    setNotice('')
+  }
 
   async function loadSingleFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? [])
@@ -126,6 +148,7 @@ export function PageImportDialog({ mode, onClose, onImport }: PageImportDialogPr
 
   function submit(event: FormEvent) {
     event.preventDefault()
+    if (!mode) return
     const drafts = mode === 'single'
       ? [{ name: name.trim(), html: html.trim(), css }]
       : multipleDrafts
@@ -148,20 +171,31 @@ export function PageImportDialog({ mode, onClose, onImport }: PageImportDialogPr
         <header>
           <div>
             <strong id="page-import-title">
-              {mode === 'single' ? 'Importar página' : mode === 'zip' ? 'Importar plantilla ZIP' : 'Importar varias páginas'}
+              {mode ? importModeCopy[mode].title : 'Importar'}
             </strong>
             <span>
-              {mode === 'single'
-                ? 'Pega HTML de FigmaToCode o carga HTML, CSS y recursos.'
-                : mode === 'zip'
-                  ? 'Carga una plantilla con HTML, CSS, imágenes y fuentes organizados en carpetas.'
-                  : 'Cada archivo HTML se convertirá en una página independiente.'}
+              {mode ? importModeCopy[mode].description : 'Elige cómo quieres añadir contenido al proyecto.'}
             </span>
           </div>
           <button aria-label="Cerrar" onClick={onClose} type="button">×</button>
         </header>
 
-        <form onSubmit={submit}>
+        {!mode ? (
+          <div className="gjs-page-import-options">
+            {(Object.entries(importModeCopy) as [PageImportMode, (typeof importModeCopy)[PageImportMode]][]).map(([value, option]) => (
+              <button key={value} onClick={() => selectMode(value)} type="button">
+                <span className="gjs-page-import-option-icon" aria-hidden="true">
+                  {value === 'single' ? '▤' : value === 'multiple' ? '▥' : 'ZIP'}
+                </span>
+                <span>
+                  <strong>{option.title}</strong>
+                  <small>{option.description}</small>
+                </span>
+                <span className="gjs-page-import-option-arrow" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </div>
+        ) : <form onSubmit={submit}>
           {mode === 'single' ? (
             <>
               <label>
@@ -241,7 +275,9 @@ export function PageImportDialog({ mode, onClose, onImport }: PageImportDialogPr
 
           {notice && <p className="gjs-page-import-notice" role="alert">{notice}</p>}
           <footer>
-            <button className="gjs-page-cancel" onClick={onClose} type="button">Cancelar</button>
+            <button className="gjs-page-cancel" onClick={initialMode ? onClose : () => selectMode(null)} type="button">
+              {initialMode ? 'Cancelar' : 'Atrás'}
+            </button>
             <button
               className="gjs-page-submit"
               disabled={busy || (mode !== 'single' && !multipleDrafts.length)}
@@ -250,7 +286,7 @@ export function PageImportDialog({ mode, onClose, onImport }: PageImportDialogPr
               {busy ? 'Leyendo…' : mode === 'single' ? 'Importar página' : mode === 'zip' ? 'Importar plantilla' : 'Importar páginas'}
             </button>
           </footer>
-        </form>
+        </form>}
       </section>
     </div>
   )

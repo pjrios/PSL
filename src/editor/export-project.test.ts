@@ -191,4 +191,39 @@ describe('new editor project export', () => {
       table: 'profiles',
     }))
   })
+
+  it('exports a generic motion activity and its runtime', async () => {
+    const bundle = buildEditorProjectBundle([{
+      id: 'practice',
+      name: 'Practice',
+      html: `<section data-motion-activity="true"
+        data-motion-reference-source="url"
+        data-motion-reference-url="https://media.example/reference.mp4"
+        data-motion-duration="2500"
+        data-motion-hands="true"
+        data-motion-pose="true"
+        data-motion-face="false"
+        data-motion-passing-score="80"></section>`,
+    }], 'practice')
+
+    expect(bundle.manifest.motionActivities).toEqual([expect.objectContaining({
+      id: 'practice-motion-1',
+      pageId: 'practice',
+      mode: 'compare',
+      input: { type: 'camera', durationMs: 2500, facingMode: 'user' },
+      processing: { checkpointReduction: true, minConfidence: 0.5, smoothing: 3 },
+      passingScore: 80,
+      reference: { type: 'url', url: 'https://media.example/reference.mp4' },
+    })])
+
+    const archive = await JSZip.loadAsync(
+      await (await new ZipProjectExporter().export(bundle)).arrayBuffer(),
+    )
+    const practice = await archive.file('pages/practice.html')!.async('string')
+    expect(archive.file('motion-runtime/analysis.js')).not.toBeNull()
+    expect(practice).toContain('data-motion-config="true"')
+    expect(practice).toContain('src="../motion-runtime/analysis.js"')
+    await expect(validateStaticArchive(await new ZipProjectExporter().export(bundle)))
+      .resolves.toEqual({ valid: true, errors: [] })
+  })
 })

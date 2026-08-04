@@ -34,7 +34,7 @@ function distance(first: Point, second: Point) {
   return Math.hypot(second.x - first.x, second.y - first.y)
 }
 
-export function attachCanvasTouchGestures(editor: Editor, onGestureStart: () => void) {
+export function attachCanvasGestures(editor: Editor, onGestureStart: () => void) {
   const pointers = new Map<number, Point>()
   let gesture: TouchGestureSnapshot | null = null
   const cleanups: Array<() => void> = []

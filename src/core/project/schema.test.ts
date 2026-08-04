@@ -155,4 +155,31 @@ describe('ProjectSchema', () => {
       elementOverrides: [override, override],
     }).success).toBe(false)
   })
+
+  it('validates generic motion activities and their data references', () => {
+    const activity = {
+      id: 'practice-motion',
+      pageId: 'practice',
+      elementId: 'practice::section:1',
+      input: { type: 'camera' as const, durationMs: 3000 },
+      reference: { type: 'url' as const, url: 'https://media.example/reference.mp4' },
+      features: { hands: true, pose: true, face: false },
+      passingScore: 75,
+    }
+    expect(ProjectSchema.safeParse({ ...validProject, motionActivities: [activity] }).success)
+      .toBe(true)
+    expect(ProjectSchema.safeParse({
+      ...validProject,
+      motionActivities: [{
+        ...activity,
+        reference: {
+          type: 'data',
+          dataSourceId: 'missing',
+          contextKey: 'record',
+          videoField: 'media_url',
+          templateField: 'motion_reference',
+        },
+      }],
+    }).success).toBe(false)
+  })
 })

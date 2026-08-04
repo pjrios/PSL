@@ -52,8 +52,17 @@ export interface SelectedDataElement {
   repeaterTableId?: string
 }
 
+export interface DataComponentEditRequest {
+  mapping: DataComponentMapping
+  options: DataComponentOptions
+  requestId: number
+  tableId: string
+  templateId: DataComponentTemplateId
+}
+
 interface SupabaseDataPanelProps {
   config: SupabaseEditorConfig
+  dataComponentEditRequest?: DataComponentEditRequest | null
   dataComponentRequest?: number
   editorProjectId: string
   onChange: (config: SupabaseEditorConfig) => void
@@ -61,6 +70,7 @@ interface SupabaseDataPanelProps {
   onRemoveBinding: () => void
   onSaveBinding: (tableId: string, field: string, target: string, scope: 'context' | 'first') => void
   onToggleRepeater: (tableId: string) => void
+  onUpdateDataComponent: (templateId: DataComponentTemplateId, tableId: string, mapping: DataComponentMapping, options: DataComponentOptions) => void
   selectedElement: SelectedDataElement | null
 }
 
@@ -69,6 +79,91 @@ type CollectionTemplate = {
   fields: Array<{ name: string; type: SupabaseFieldType }>
   id: string
   name: string
+}
+
+type MediaSample = {
+  error?: string
+  loading: boolean
+  url?: string
+}
+
+type LoadedMediaSample = {
+  suggestedKind?: DataComponentOptions['mediaKind']
+  url: string
+}
+
+async function loadMediaSample(
+  config: SupabaseEditorConfig,
+  table: SupabaseTableConfig,
+  field: string,
+  signal: AbortSignal,
+) {
+  if (!config.projectUrl || !isSafePublishableKey(config.publishableKey)) {
+    throw new Error('Conecta Supabase para cargar una vista previa real.')
+  }
+  const accessToken = readSupabaseAccessToken(config.projectUrl)
+  if ((table.access === 'authenticated_read' || table.access === 'user_owned') && !accessToken) {
+    throw new Error('Inicia sesión en la vista previa para ver medios protegidos.')
+  }
+  const url = new URL(`${config.projectUrl.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table.name)}`)
+  url.searchParams.set('select', field)
+  url.searchParams.set(field, 'not.is.null')
+  url.searchParams.set('limit', '1')
+  const response = await fetch(url.href, {
+    signal,
+    headers: {
+      apikey: config.publishableKey,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+  })
+  if (!response.ok) throw new Error('No pudimos leer una URL de esta colección.')
+  const records = await response.json().catch(() => []) as unknown
+  const value = Array.isArray(records) && records[0] && typeof records[0] === 'object'
+    ? (records[0] as Record<string, unknown>)[field]
+    : undefined
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const mediaUrl = value.trim()
+  const storageMatch = /^storage:\/\/([^/]+)\/(.+)$/i.exec(mediaUrl)
+  if (storageMatch) {
+    if (!accessToken) throw new Error('Inicia sesión en la vista previa para abrir este archivo de Storage.')
+    const encodedPath = storageMatch[2].split('/').map((segment) => encodeURIComponent(segment)).join('/')
+    const signedResponse = await fetch(
+      `${config.projectUrl.replace(/\/$/, '')}/storage/v1/object/sign/${encodeURIComponent(storageMatch[1])}/${encodedPath}`,
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          apikey: config.publishableKey,
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn: 3_600 }),
+      },
+    )
+    const signedResult = await signedResponse.json().catch(() => ({})) as Record<string, unknown>
+    const signedPath = signedResult.signedURL ?? signedResult.signedUrl
+    if (!signedResponse.ok || typeof signedPath !== 'string') {
+      throw new Error('No pudimos abrir este archivo privado de Supabase Storage.')
+    }
+    return {
+      suggestedKind: /video/i.test(storageMatch[1]) ? 'video' : undefined,
+      url: /^https?:\/\//i.test(signedPath)
+        ? signedPath
+        : `${config.projectUrl.replace(/\/$/, '')}/storage/v1${signedPath.startsWith('/') ? '' : '/'}${signedPath}`,
+    } satisfies LoadedMediaSample
+  }
+  try {
+    const parsed = new URL(mediaUrl)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('unsupported')
+    }
+    return {
+      suggestedKind: /\.(?:m4v|mov|mp4|webm)(?:$|\?)/i.test(parsed.href) ? 'video' : undefined,
+      url: parsed.href,
+    } satisfies LoadedMediaSample
+  } catch {
+    throw new Error('La URL guardada no es un enlace web ni una referencia válida de Supabase Storage.')
+  }
 }
 
 const collectionTemplates: CollectionTemplate[] = [
@@ -426,13 +521,16 @@ function CollectionWizard({ config, onClose, onCreate }: {
   )
 }
 
-function DataComponentWizard({ config, initialTableId, initialTemplateId, onClose, onInsert, onRequestCreate }: {
+function DataComponentWizard({ config, editMode = false, initialMapping, initialOptions, initialTableId, initialTemplateId, onClose, onRequestCreate, onSubmit }: {
   config: SupabaseEditorConfig
+  editMode?: boolean
+  initialMapping?: DataComponentMapping
+  initialOptions?: DataComponentOptions
   initialTableId?: string
   initialTemplateId?: DataComponentTemplateId
   onClose: () => void
-  onInsert: (templateId: DataComponentTemplateId, tableId: string, mapping: DataComponentMapping, options: DataComponentOptions) => void
   onRequestCreate: (templateId: DataComponentTemplateId) => void
+  onSubmit: (templateId: DataComponentTemplateId, tableId: string, mapping: DataComponentMapping, options: DataComponentOptions) => void
 }) {
   const availableTables = config.tables.filter((table) => table.access !== 'private')
   const [step, setStep] = useState(initialTableId ? 3 : 1)
@@ -440,11 +538,16 @@ function DataComponentWizard({ config, initialTableId, initialTemplateId, onClos
   const [tableId, setTableId] = useState(initialTableId ?? availableTables[0]?.id ?? '')
   const table = availableTables.find((candidate) => candidate.id === tableId)
   const template = dataComponentTemplateById(templateId)
-  const [mapping, setMapping] = useState<DataComponentMapping>(() => table
+  const [mapping, setMapping] = useState<DataComponentMapping>(() => initialMapping ?? (table
     ? suggestDataComponentMapping(templateId, table)
-    : {})
-  const [mediaKind, setMediaKind] = useState<DataComponentOptions['mediaKind']>('image')
-  const [displayOptions, setDisplayOptions] = useState(() => defaultDataComponentOptions(initialTemplateId ?? 'card_grid'))
+    : {}))
+  const [mappingContext, setMappingContext] = useState(`${templateId}:${tableId}`)
+  const [mediaKind, setMediaKind] = useState<DataComponentOptions['mediaKind']>(initialOptions?.mediaKind ?? 'image')
+  const [displayOptions, setDisplayOptions] = useState(() => ({
+    ...defaultDataComponentOptions(initialTemplateId ?? 'card_grid'),
+    ...initialOptions,
+  }))
+  const [mediaSample, setMediaSample] = useState<MediaSample>({ loading: false })
 
   function chooseDataTemplate(nextTemplateId: DataComponentTemplateId) {
     setTemplateId(nextTemplateId)
@@ -467,11 +570,38 @@ function DataComponentWizard({ config, initialTableId, initialTemplateId, onClos
   }
 
   useEffect(() => {
-    if (table) setMapping(suggestDataComponentMapping(templateId, table))
-  }, [table, templateId])
+    const nextContext = `${templateId}:${tableId}`
+    if (!table || nextContext === mappingContext) return
+    setMapping(suggestDataComponentMapping(templateId, table))
+    setMappingContext(nextContext)
+  }, [mappingContext, table, tableId, templateId])
+
+  useEffect(() => {
+    const field = mapping.media
+    if (step !== 3 || !table || !field) {
+      setMediaSample({ loading: false })
+      return
+    }
+    const controller = new AbortController()
+    setMediaSample({ loading: true })
+    void loadMediaSample(config, table, field, controller.signal).then((sample) => {
+      if (!controller.signal.aborted) {
+        if (sample?.suggestedKind) setMediaKind(sample.suggestedKind)
+        setMediaSample(sample
+        ? { loading: false, url: sample.url }
+        : { loading: false, error: 'No hay una URL guardada todavía en este campo.' })
+      }
+    }).catch((cause: unknown) => {
+      if (!controller.signal.aborted) setMediaSample({
+        loading: false,
+        error: cause instanceof Error ? cause.message : 'No pudimos cargar la vista previa.',
+      })
+    })
+    return () => controller.abort()
+  }, [config, mapping.media, step, table])
 
   return (
-    <Modal onClose={onClose} title="Añadir componente con datos">
+    <Modal onClose={onClose} title={editMode ? 'Editar componente con datos' : 'Añadir componente con datos'}>
       <div className="gjs-data-wizard-progress" aria-label={`Paso ${step} de 3`}>
         {[1, 2, 3].map((number) => <span className={number <= step ? 'active' : ''} key={number} />)}
       </div>
@@ -512,6 +642,28 @@ function DataComponentWizard({ config, initialTableId, initialTemplateId, onClos
             <option value="image">Imagen</option><option value="video">Video con controles</option>
           </select>
         </label>}
+        {mapping.media && <section className="gjs-data-media-sample" aria-label="Vista previa del medio">
+          <div>
+            <strong>Vista previa real</strong>
+            <span>Primer enlace disponible en {collectionDisplayName(table)}</span>
+          </div>
+          {mediaSample.loading && <p role="status">Cargando medio…</p>}
+          {!mediaSample.loading && mediaSample.url && mediaKind === 'image' && <img
+            alt={`Vista previa de ${mapping.media}`}
+            onError={() => setMediaSample({ loading: false, error: 'La URL existe, pero no devuelve una imagen visible.' })}
+            src={mediaSample.url}
+          />}
+          {!mediaSample.loading && mediaSample.url && mediaKind === 'video' && <video
+            aria-label={`Vista previa de ${mapping.media}`}
+            controls
+            onError={() => setMediaSample({ loading: false, error: 'La URL existe, pero no devuelve un video reproducible.' })}
+            playsInline
+            preload="metadata"
+            src={mediaSample.url}
+          />}
+          {!mediaSample.loading && mediaSample.error && <p role="status">{mediaSample.error}</p>}
+          {!mediaSample.loading && mediaSample.url && <a href={mediaSample.url} rel="noreferrer" target="_blank">Abrir URL original ↗</a>}
+        </section>}
         {template.repeatMode === 'collection' && <details className="gjs-data-display-options" open>
           <summary>Cantidad y páginas</summary>
           <div className="gjs-data-display-options-body">
@@ -537,8 +689,8 @@ function DataComponentWizard({ config, initialTableId, initialTemplateId, onClos
         {step > 1 ? <button onClick={() => setStep((current) => current - 1)} type="button">Atrás</button> : <span />}
         <button className="gjs-flow-primary" disabled={(step === 2 && !tableId) || (step === 3 && !table)} onClick={() => {
           if (step < 3) setStep((current) => current + 1)
-          else if (table) onInsert(templateId, table.id, mapping, { ...displayOptions, mediaKind })
-        }} type="button">{step < 3 ? 'Continuar' : 'Añadir a la página'}</button>
+          else if (table) onSubmit(templateId, table.id, mapping, { ...displayOptions, mediaKind })
+        }} type="button">{step < 3 ? 'Continuar' : editMode ? 'Guardar cambios' : 'Añadir a la página'}</button>
       </div>
     </Modal>
   )
@@ -914,6 +1066,9 @@ export function SupabaseDataPanel(props: SupabaseDataPanelProps) {
   const [wizardOpen, setWizardOpen] = useState(false)
   const [dataComponentOpen, setDataComponentOpen] = useState(false)
   const [dataComponentDefaults, setDataComponentDefaults] = useState<{
+    editMode?: boolean
+    mapping?: DataComponentMapping
+    options?: DataComponentOptions
     tableId?: string
     templateId?: DataComponentTemplateId
   }>({})
@@ -931,6 +1086,19 @@ export function SupabaseDataPanel(props: SupabaseDataPanelProps) {
     setDataComponentDefaults({})
     setDataComponentOpen(true)
   }, [props.dataComponentRequest])
+
+  useEffect(() => {
+    const request = props.dataComponentEditRequest
+    if (!request) return
+    setDataComponentDefaults({
+      editMode: true,
+      mapping: request.mapping,
+      options: request.options,
+      tableId: request.tableId,
+      templateId: request.templateId,
+    })
+    setDataComponentOpen(true)
+  }, [props.dataComponentEditRequest])
 
   function toggleSection(section: keyof typeof openSections) {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }))
@@ -950,7 +1118,11 @@ export function SupabaseDataPanel(props: SupabaseDataPanelProps) {
     const firstTable = tables[0]
     if (!firstTable) return
     if (pendingDataTemplate) {
-      setDataComponentDefaults({ tableId: firstTable.id, templateId: pendingDataTemplate })
+      setDataComponentDefaults((current) => ({
+        ...current,
+        tableId: firstTable.id,
+        templateId: pendingDataTemplate,
+      }))
       setPendingDataTemplate(undefined)
       setDataComponentOpen(true)
     } else {
@@ -1021,15 +1193,22 @@ export function SupabaseDataPanel(props: SupabaseDataPanelProps) {
       }} onCreate={addCollections} />}
       {dataComponentOpen && <DataComponentWizard
         config={config}
+        editMode={dataComponentDefaults.editMode}
+        initialMapping={dataComponentDefaults.mapping}
+        initialOptions={dataComponentDefaults.options}
         initialTableId={dataComponentDefaults.tableId}
         initialTemplateId={dataComponentDefaults.templateId}
-        onClose={() => setDataComponentOpen(false)}
-        onInsert={(templateId, tableId, mapping, options) => {
-          props.onInsertDataComponent(templateId, tableId, mapping, options)
+        onClose={() => {
           setDataComponentOpen(false)
           setDataComponentDefaults({})
         }}
         onRequestCreate={requestCollectionForComponent}
+        onSubmit={(templateId, tableId, mapping, options) => {
+          if (dataComponentDefaults.editMode) props.onUpdateDataComponent(templateId, tableId, mapping, options)
+          else props.onInsertDataComponent(templateId, tableId, mapping, options)
+          setDataComponentOpen(false)
+          setDataComponentDefaults({})
+        }}
       />}
       {openTableId && <TableModal config={config} editorProjectId={props.editorProjectId} onChange={(next) => onChange(normalizedSupabaseConfig(next))} onClose={() => setOpenTableId(null)} tableId={openTableId} />}
     </>

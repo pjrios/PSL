@@ -5,6 +5,7 @@ import type {
   ProjectBundle,
   ProjectConnection,
   ProjectFile,
+  MotionActivity,
 } from '../core/project'
 import { zipProjectExporter } from '../modules/exporter'
 import { createStableElementId } from '../modules/preview'
@@ -22,7 +23,13 @@ import {
   supabaseDataSourceId,
 } from './supabase-data'
 import type { SupabaseEditorConfig } from './supabase-data'
-import { DATA_PAGE_SIZE_ATTRIBUTE, DATA_PAGINATION_ATTRIBUTE } from './data-component-templates'
+import {
+  DATA_COMPONENT_ATTRIBUTE,
+  DATA_PAGE_SIZE_ATTRIBUTE,
+  DATA_PAGINATION_ATTRIBUTE,
+  dataComponentStyles,
+} from './data-component-templates'
+import { readMotionActivities } from './motion-analysis'
 
 const encoder = new TextEncoder()
 
@@ -58,6 +65,16 @@ function escapeScriptContent(value: string) {
 function pageDocument(page: EditorExportPage) {
   const parsed = new DOMParser().parseFromString(page.html, 'text/html')
   const bodyMarkup = parsed.body.innerHTML || page.html
+  const usesDataComponents = Boolean(parsed.querySelector([
+    `[${DATA_COMPONENT_ATTRIBUTE}]`,
+    '.psl-data-grid',
+    '.psl-data-carousel',
+    '.psl-data-list',
+    '.psl-data-featured',
+  ].join(',')))
+  const pageStyles = [page.css ?? '', usesDataComponents ? dataComponentStyles : '']
+    .filter(Boolean)
+    .join('\n')
   const title = document.createElement('div')
   title.textContent = page.name
 
@@ -67,7 +84,7 @@ function pageDocument(page: EditorExportPage) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title.innerHTML}</title>
-    <style>${escapeStyleContent(page.css ?? '')}</style>
+    <style>${escapeStyleContent(pageStyles)}</style>
   </head>
   <body>
     ${bodyMarkup}
@@ -105,6 +122,7 @@ export function buildEditorProjectBundle(
   const connections: ProjectConnection[] = []
   const bindings: DataBinding[] = []
   const repeaters: DataRepeater[] = []
+  const motionActivities: MotionActivity[] = []
   const normalizedData = supabaseConfig ? normalizedSupabaseConfig(supabaseConfig) : undefined
   const fallbackTableId = normalizedData?.tables[0]?.id
   const authPage = pages.find((page) => {
@@ -124,6 +142,7 @@ export function buildEditorProjectBundle(
   pages.forEach((page) => {
     const markup = pageDocument(page)
     const parsed = new DOMParser().parseFromString(markup, 'text/html')
+    motionActivities.push(...readMotionActivities(parsed, page.id, normalizedData?.tables ?? []))
     parsed.querySelectorAll<HTMLElement>(
       `[${FLOW_ACTION_ATTRIBUTE}="navigate"][${FLOW_TARGET_ATTRIBUTE}]`,
     ).forEach((element, index) => {
@@ -190,6 +209,18 @@ export function buildEditorProjectBundle(
           itemContext: 'record',
           ...(pageSize ? { pageSize } : {}),
           ...(element.getAttribute(DATA_PAGINATION_ATTRIBUTE) === 'true' ? { pagination: true } : {}),
+          ...(element.getAttribute('data-psl-empty-message')?.trim()
+            ? { emptyMessage: element.getAttribute('data-psl-empty-message')!.trim().slice(0, 300) }
+            : {}),
+          ...(element.getAttribute('data-psl-error-message')?.trim()
+            ? { errorMessage: element.getAttribute('data-psl-error-message')!.trim().slice(0, 300) }
+            : {}),
+          ...(element.getAttribute('data-psl-user-filter-column')?.trim()
+            ? { userFilterColumn: element.getAttribute('data-psl-user-filter-column')!.trim() }
+            : {}),
+          ...(element.getAttribute('data-psl-include-unpublished') === 'true'
+            ? { includeUnpublished: true }
+            : {}),
         })
       })
     files.push({
@@ -207,6 +238,11 @@ export function buildEditorProjectBundle(
     || !normalizedData.projectUrl
     || !isSafePublishableKey(normalizedData.publishableKey))) {
     throw new Error('Conecta y verifica Supabase antes de exportar elementos con datos.')
+  }
+
+  if (motionActivities.some((activity) => activity.reference.type === 'data' || activity.persistence)
+    && (!normalizedData || !normalizedData.projectUrl || !isSafePublishableKey(normalizedData.publishableKey))) {
+    throw new Error('Conecta y verifica Supabase antes de usar referencias o resultados de movimiento con datos.')
   }
 
   if (normalizedData?.projectUrl && normalizedData.publishableKey) {
@@ -245,20 +281,29 @@ export function buildEditorProjectBundle(
         },
       } : {}),
       ...(normalizedData?.projectUrl && normalizedData.publishableKey ? {
-        dataSources: normalizedData.tables.map((table) => ({
-          id: supabaseDataSourceId(table.id),
-          name: table.name,
-          type: 'supabase' as const,
-          projectUrl: normalizedData.projectUrl,
-          publishableKey: normalizedData.publishableKey,
-          table: table.name,
-          publishedOnly: table.access === 'public_read',
-          requiresAuth: table.access === 'authenticated_read' || table.access === 'user_owned',
-          ...(table.access === 'public_read' ? { orderColumn: 'sort_order' } : {}),
-        })),
+        dataSources: normalizedData.tables.map((table) => {
+          const recentColumn = table.name === 'practice_attempts'
+            ? 'created_at'
+            : table.name === 'practice_progress'
+              ? 'last_practiced_at'
+              : table.name === 'favorite_practices' ? 'created_at' : undefined
+          return {
+            id: supabaseDataSourceId(table.id),
+            name: table.name,
+            type: 'supabase' as const,
+            projectUrl: normalizedData.projectUrl,
+            publishableKey: normalizedData.publishableKey,
+            table: table.name,
+            publishedOnly: table.access === 'public_read',
+            requiresAuth: table.access !== 'public_read',
+            ...(table.access === 'public_read' ? { orderColumn: 'sort_order', orderDirection: 'asc' as const } : {}),
+            ...(recentColumn ? { orderColumn: recentColumn, orderDirection: 'desc' as const } : {}),
+          }
+        }),
       } : {}),
       ...(bindings.length ? { bindings } : {}),
       ...(repeaters.length ? { repeaters } : {}),
+      ...(motionActivities.length ? { motionActivities } : {}),
     },
     files,
   }

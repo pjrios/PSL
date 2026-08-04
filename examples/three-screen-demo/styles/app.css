@@ -14,7 +14,7 @@ body {
 }
 
 .demo-page {
-  min-height: 100vh;
+  min-height: var(--psl-editor-viewport-height, 100vh);
   background: linear-gradient(145deg, #f8fcfb 0%, #e7f5f2 100%);
 }
 

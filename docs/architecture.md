@@ -3,7 +3,7 @@
 ## Objetivo
 
 PSL Visual Builder transforma pantallas HTML/CSS en una aplicación navegable con
-autenticación opcional y, en hitos posteriores, añadirá MediaPipe y publicación. Cada una
+autenticación y análisis de movimiento opcionales y, en hitos posteriores, añadirá publicación. Cada una
 de esas capacidades debe poder evolucionar sin reescribir las demás.
 
 ## Principios
@@ -31,7 +31,7 @@ del editor o si un módulo intenta alcanzar los archivos internos de otro.
 │ design · importer · page-catalog · preview · navigation      │
 │ · exporter                                                   │
 ├──────────────────────────────────────────────────────────────┤
-│ core/project         Esquema, tipos y validación              │
+│ core/                Proyecto y comparación temporal pura     │
 ├──────────────────────────────────────────────────────────────┤
 │ runtime/             Código inyectado en la web exportada     │
 └──────────────────────────────────────────────────────────────┘
@@ -109,12 +109,26 @@ importar desde `modules` ni `app`.
 - Protege las demás páginas y conserva el destino solicitado para volver
   después del inicio de sesión.
 
+### Análisis de movimiento
+
+- `core/motion` contiene filtrado de confianza, suavizado, reducción a puntos
+  clave, distancia de características, alineación DTW y puntuación sin depender
+  de MediaPipe ni del editor.
+- `editor/motion-analysis` registra la actividad y sus partes editables de
+  entrada, controles y resultados, y las traduce hacia `motionActivities`.
+- `editor/MotionPanel` ofrece un inspector condicional separado de las
+  propiedades visuales para analizar, crear referencias o comparar.
+- `runtime/motion-runtime` carga MediaPipe Holistic en un Web Worker, solicita
+  la cámara después de una acción del usuario, admite videos de la página o por
+  URL, compila referencias locales, resuelve plantillas por URL o fuente de
+  datos y guarda resultados solamente cuando se configuró una colección.
+- El runtime exportado usa el marcador neutral `data-motion-activity` y se
+  publica como `motion-runtime/analysis.js`.
+
 ## Módulos futuros
 
 ```text
-modules/mediapipe/        Componentes y configuración visual
 modules/cloudflare/       Preparación o publicación del build
-runtime/mediapipe/        Cámara, landmarks y comparación
 ```
 
 Estos módulos consumirán `core/project`, pero navegación no dependerá de ellos.

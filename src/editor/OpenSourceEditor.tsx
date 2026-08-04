@@ -10,7 +10,12 @@ import touch from 'grapesjs-touch'
 import imageEditor from 'grapesjs-tui-image-editor'
 import 'grapesjs/dist/css/grapes.min.css'
 import handSvg from '../../examples/three-screen-demo/assets/hand.svg?raw'
-import { demoCss, demoPages, demoProject } from '../demo'
+import {
+  installLspStarterProject,
+  lspStarterCss,
+  lspStarterPages,
+  lspStarterSupabaseConfig,
+} from '../starter/lsp-learning-project'
 import { loadEditorProjectData, saveEditorProjectData } from '../editor-platform'
 import {
   FLOW_ACTION_ATTRIBUTE,
@@ -27,6 +32,7 @@ import {
   createEditorPreviewSession,
 } from './editor-preview-session'
 import type { EditorPreviewSession } from './editor-preview-session'
+import type { MotionReferenceRuntimeMessage } from '../runtime/motion-runtime'
 import {
   DATA_BIND_FIELD_ATTRIBUTE,
   DATA_BIND_TARGET_ATTRIBUTE,
@@ -39,12 +45,17 @@ import {
 } from './supabase-data'
 import type { SupabaseEditorConfig } from './supabase-data'
 import { SupabaseDataPanel } from './SupabaseDataPanel'
+import type { DataComponentEditRequest } from './SupabaseDataPanel'
 import {
   createDataComponentMarkup,
+  DATA_COMPONENT_ATTRIBUTE,
   DATA_DESIGN_PLACEHOLDER_ATTRIBUTE,
+  DATA_DESIGN_PREVIEW_COUNT_ATTRIBUTE,
   DATA_PAGE_SIZE_ATTRIBUTE,
   DATA_PAGINATION_ATTRIBUTE,
   dataComponentStyles,
+  findDataComponentRoot,
+  readDataComponentSettings,
 } from './data-component-templates'
 import type {
   DataComponentMapping,
@@ -52,7 +63,6 @@ import type {
   DataComponentTemplateId,
 } from './data-component-templates'
 import { PageImportDialog } from './PageImportDialog'
-import type { PageImportMode } from './PageImportDialog'
 import { PageRenameDialog } from './PageRenameDialog'
 import { prepareImportedPage } from './page-import'
 import type { ImportedPageDraft } from './page-import'
@@ -65,13 +75,16 @@ import {
   stepCanvasZoom,
 } from './canvas-viewport'
 import type { CanvasZoomMode } from './canvas-viewport'
-import { attachCanvasTouchGestures } from './canvas-gestures'
-
-function pageComponents(html: string) {
-  const document = new DOMParser().parseFromString(html, 'text/html')
-  const handAsset = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(handSvg)}`
-  return document.body.innerHTML.replaceAll('../assets/hand.svg', handAsset)
-}
+import { attachCanvasGestures } from './canvas-gestures'
+import {
+  createMotionAnalysisPlugin,
+  findMotionActivityComponent,
+  MOTION_CAPTURE_REFERENCE_BLOCK_ID,
+  MOTION_COMPARE_BLOCK_ID,
+  MOTION_ANALYSIS_BLOCK_ID,
+  MOTION_VIEW_REFERENCE_BLOCK_ID,
+} from './motion-analysis'
+import { MotionPanel, MotionSettingsDialog } from './MotionPanel'
 
 function normalizedGrapesProjectData(value: Record<string, unknown>): ProjectData {
   return {
@@ -181,22 +194,64 @@ function positionColorPicker() {
 }
 
 function ensureDataDesignPlaceholders(editor: Editor) {
-  let addedCount = 0
+  let changedCount = 0
   editor.Pages.getAll().forEach((page) => {
+    page.getMainComponent().find([
+      `[${DATA_COMPONENT_ATTRIBUTE}] video.psl-data-card__media`,
+      `[${DATA_COMPONENT_ATTRIBUTE}] video.psl-data-list__media`,
+      `[${DATA_COMPONENT_ATTRIBUTE}] video.psl-data-featured__media`,
+    ].join(',')).forEach((video) => {
+      const attributes = video.getAttributes()
+      if (attributes.controls !== undefined) {
+        video.removeAttributes('controls')
+        changedCount += 1
+      }
+      const thumbnailAttributes = {
+        'aria-hidden': 'true',
+        muted: '',
+        playsinline: '',
+        preload: 'metadata',
+        tabindex: '-1',
+      }
+      if (Object.entries(thumbnailAttributes).some(([name, value]) => attributes[name] !== value)) {
+        video.addAttributes(thumbnailAttributes)
+        changedCount += 1
+      }
+    })
     page.getMainComponent().find(`[${DATA_REPEATER_ATTRIBUTE}]`).forEach((template) => {
       const parent = template.parent()
       if (!parent) return
       const requestedPageSize = Number.parseInt(String(template.getAttributes()[DATA_PAGE_SIZE_ATTRIBUTE] ?? ''), 10)
       if (!Number.isInteger(requestedPageSize) || requestedPageSize < 2 || requestedPageSize > 100) return
+      const requestedPreviewCount = Number.parseInt(String(
+        template.getAttributes()[DATA_DESIGN_PREVIEW_COUNT_ATTRIBUTE] ?? '',
+      ), 10)
+      const fallbackPreviewCount = parent.getClasses().includes('psl-data-carousel')
+        ? 4
+        : parent.getClasses().includes('psl-data-list') ? 2 : 8
+      const previewCount = Number.isInteger(requestedPreviewCount)
+        && requestedPreviewCount > 0
+        && requestedPreviewCount <= 12
+        ? Math.min(requestedPageSize, requestedPreviewCount)
+        : Math.min(requestedPageSize, fallbackPreviewCount)
+      if (String(template.getAttributes()[DATA_DESIGN_PREVIEW_COUNT_ATTRIBUTE] ?? '') !== String(previewCount)) {
+        template.addAttributes({ [DATA_DESIGN_PREVIEW_COUNT_ATTRIBUTE]: String(previewCount) })
+        changedCount += 1
+      }
       const existingPlaceholders = parent.components().models.filter((component) =>
         component.getAttributes()[DATA_DESIGN_PLACEHOLDER_ATTRIBUTE] === 'true')
-      existingPlaceholders.forEach((placeholder) => {
+      existingPlaceholders.slice(Math.max(0, previewCount - 1)).forEach((placeholder) => {
+        placeholder.remove()
+        changedCount += 1
+      })
+      const retainedPlaceholders = existingPlaceholders.slice(0, Math.max(0, previewCount - 1))
+      retainedPlaceholders.forEach((placeholder) => {
         if (placeholder.getAttributes()['aria-hidden'] !== undefined) {
           placeholder.removeAttributes('aria-hidden')
-          addedCount += 1
+          changedCount += 1
         }
       })
-      const missingCount = Math.max(0, requestedPageSize - 1 - existingPlaceholders.length)
+      const missingCount = Math.max(0, previewCount - 1 - retainedPlaceholders.length)
       Array.from({ length: missingCount }).forEach(() => {
         const placeholder = template.clone()
         const boundElements = [placeholder, ...placeholder.find(`[${DATA_BIND_FIELD_ATTRIBUTE}]`)]
@@ -215,16 +270,17 @@ function ensureDataDesignPlaceholders(editor: Editor) {
           DATA_REPEATER_ATTRIBUTE,
           DATA_PAGE_SIZE_ATTRIBUTE,
           DATA_PAGINATION_ATTRIBUTE,
+          DATA_DESIGN_PREVIEW_COUNT_ATTRIBUTE,
         ])
         placeholder.addAttributes({
           [DATA_DESIGN_PLACEHOLDER_ATTRIBUTE]: 'true',
         })
         parent.append(placeholder)
-        addedCount += 1
+        changedCount += 1
       })
     })
   })
-  return addedCount
+  return changedCount
 }
 
 const EDITOR_VIEWPORT_GUARD_ATTRIBUTE = 'data-psl-editor-viewport-guard'
@@ -245,22 +301,115 @@ export function installEditorCanvasLayoutGuards(
     document.head.append(style)
   }
   style.textContent = `
+    ${dataComponentStyles}
+    :root {
+      --psl-editor-viewport-height: ${heightCap}px !important;
+      --psl-editor-data-card-height: 320px;
+      --psl-editor-data-list-height: 180px;
+    }
+    :where(.demo-page, .screen, .tpl-wrap, .tpl-dash-side, .psl-auth-page, .psl-auth-brand, .psl-auth-content, .lsp-page) {
+      min-height: var(--psl-editor-viewport-height) !important;
+    }
     [${EDITOR_VIEWPORT_GUARD_ATTRIBUTE}] {
-      min-height: min(100vh, ${heightCap}px) !important;
+      min-height: var(--psl-editor-viewport-height) !important;
+    }
+    .psl-data-grid {
+      max-height: calc(var(--psl-editor-data-card-height) + var(--psl-editor-data-card-height) + 3.25rem) !important;
+      overflow: hidden !important;
+    }
+    .psl-data-grid > .psl-data-card,
+    .psl-data-carousel > .psl-data-carousel__item {
+      height: var(--psl-editor-data-card-height) !important;
+    }
+    .psl-data-card__media {
+      height: 170px !important;
+      aspect-ratio: auto !important;
+    }
+    .psl-data-card__content {
+      max-height: 150px !important;
+      overflow: hidden !important;
+    }
+    .psl-data-item--without-media > .psl-data-card__content {
+      max-height: var(--psl-editor-data-card-height) !important;
+    }
+    .psl-data-card__content h2,
+    .psl-data-card__content h3,
+    .psl-data-card__content p {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+    }
+    .psl-data-card__content h2,
+    .psl-data-card__content h3 { -webkit-line-clamp: 2; }
+    .psl-data-card__content p { -webkit-line-clamp: 3; }
+    .psl-data-list {
+      max-height: calc(var(--psl-editor-data-list-height) + var(--psl-editor-data-list-height) + 3rem) !important;
+      overflow: hidden !important;
+    }
+    .psl-data-list > .psl-data-list__item {
+      height: var(--psl-editor-data-list-height) !important;
+      overflow: hidden !important;
+    }
+    .psl-data-list__media {
+      height: 146px !important;
+      aspect-ratio: auto !important;
+    }
+    .psl-data-list__content p {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+    .psl-data-carousel {
+      display: grid !important;
+      grid-template-columns: repeat(var(--psl-data-cols-desktop, 4), minmax(0, 1fr)) !important;
+      max-height: calc(var(--psl-editor-data-card-height) + 2rem) !important;
+      overflow: hidden !important;
+    }
+    .psl-data-carousel > .psl-data-carousel__item {
+      width: auto !important;
+      min-width: 0 !important;
+    }
+    @media (max-width: 900px) {
+      .psl-data-carousel {
+        grid-template-columns: repeat(var(--psl-data-cols-tablet, 3), minmax(0, 1fr)) !important;
+      }
+    }
+    @media (max-width: 600px) {
+      .psl-data-carousel {
+        grid-template-columns: repeat(var(--psl-data-cols-mobile, 1), minmax(0, 1fr)) !important;
+      }
+    }
+    @supports (container-type: inline-size) {
+      @container psl-data-component (max-width: 900px) {
+        .psl-data-carousel {
+          grid-template-columns: repeat(var(--psl-data-cols-tablet, 3), minmax(0, 1fr)) !important;
+        }
+      }
+      @container psl-data-component (max-width: 600px) {
+        .psl-data-carousel {
+          grid-template-columns: repeat(var(--psl-data-cols-mobile, 1), minmax(0, 1fr)) !important;
+        }
+      }
+    }
+    .psl-data-featured {
+      height: 420px !important;
+      overflow: hidden !important;
     }
   `
 
   const viewportHeight = window.innerHeight
-  if (viewportHeight <= heightCap * 2) return 0
+  const runawayMinimum = Math.max(heightCap * 2, viewportHeight * 0.9)
+  const normalizedPageShells = body.querySelectorAll('.lsp-page').length
 
   let guardedCount = 0
   ;[body, ...Array.from(body.querySelectorAll<HTMLElement>('*'))].forEach((element) => {
     const minHeight = Number.parseFloat(window.getComputedStyle(element).minHeight)
-    if (!Number.isFinite(minHeight) || minHeight < viewportHeight * 0.9) return
+    if (!Number.isFinite(minHeight) || minHeight < runawayMinimum) return
     element.setAttribute(EDITOR_VIEWPORT_GUARD_ATTRIBUTE, 'true')
     guardedCount += 1
   })
-  return guardedCount
+  return guardedCount + normalizedPageShells
 }
 
 function findPreviewButton(editor: Editor): Button | null {
@@ -308,23 +457,28 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
   const canvasZoomModeRef = useRef<CanvasZoomMode>('fit')
   const canvasViewsRef = useRef(new Map<string, CanvasViewState>())
   const currentCanvasDeviceRef = useRef('desktop')
+  const editingDataComponentRef = useRef<Component | null>(null)
   const panToolLockedRef = useRef(false)
   const initialSupabaseConfigRef = useRef(loadSupabaseConfig())
   const supabaseConfigRef = useRef(initialSupabaseConfigRef.current)
   const [error, setError] = useState<string | null>(null)
-  const [pages, setPages] = useState(demoProject.pages.map(({ id, name }) => ({ id, name })))
-  const [activePageId, setActivePageId] = useState(demoProject.startPage)
-  const [rightPanel, setRightPanel] = useState<'styles' | 'properties' | 'flow' | 'data'>('styles')
+  const [pages, setPages] = useState(lspStarterPages.map(({ id, name }) => ({ id, name })))
+  const [activePageId, setActivePageId] = useState(lspStarterPages[0].id)
+  const [rightPanel, setRightPanel] = useState<'styles' | 'properties' | 'motion' | 'flow' | 'data'>('styles')
   const [blocksOpen, setBlocksOpen] = useState(false)
+  const [dataComponentEditRequest, setDataComponentEditRequest] = useState<DataComponentEditRequest | null>(null)
   const [dataComponentRequest, setDataComponentRequest] = useState(0)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const [createMenuPosition, setCreateMenuPosition] = useState({ left: 0, top: 0 })
   const [pageMenuId, setPageMenuId] = useState<string | null>(null)
   const [pageMenuPosition, setPageMenuPosition] = useState({ left: 0, top: 0 })
-  const [pageImportMode, setPageImportMode] = useState<PageImportMode | null>(null)
+  const [pageImportOpen, setPageImportOpen] = useState(false)
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false)
   const [renamingPage, setRenamingPage] = useState<{ id: string; name: string } | null>(null)
   const [selectedElement, setSelectedElement] = useState<ElementSummary | null>(null)
+  const [selectedMotionComponent, setSelectedMotionComponent] = useState<Component | null>(null)
+  const [motionNotice, setMotionNotice] = useState('')
+  const [motionDialogOpen, setMotionDialogOpen] = useState(false)
   const [flowTargetPageId, setFlowTargetPageId] = useState('')
   const [flowNotice, setFlowNotice] = useState('')
   const [previewActive, setPreviewActive] = useState(false)
@@ -351,6 +505,8 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
     ) return
 
     let canvasResizeObserver: ResizeObserver | undefined
+    const canvasDoubleClickCleanups: Array<() => void> = []
+    const canvasDoubleClickDocuments = new WeakSet<Document>()
     try {
       const editorAccountStoragePlugin = (editor: Editor) => {
         editor.Storage.add('editor-account', {
@@ -369,6 +525,15 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
               if (projectData.grapesjs && Object.keys(projectData.grapesjs).length > 0) {
                 return normalizedGrapesProjectData(projectData.grapesjs)
               }
+
+              const nextConfig = normalizedSupabaseConfig({
+                ...lspStarterSupabaseConfig,
+                projectUrl: supabaseConfigRef.current.projectUrl,
+                publishableKey: supabaseConfigRef.current.publishableKey,
+              })
+              supabaseConfigRef.current = nextConfig
+              setSupabaseConfig(nextConfig)
+              storeSupabaseConfig(nextConfig)
             } catch (cause: unknown) {
               setError(cause instanceof Error ? cause.message : 'No se pudo cargar el proyecto guardado.')
             }
@@ -425,6 +590,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
         },
         plugins: [
           editorAccountStoragePlugin,
+          createMotionAnalysisPlugin(),
           presetWebpage,
           blocksBasic,
           pluginForms,
@@ -453,13 +619,13 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
           },
         },
         pageManager: {
-          pages: demoProject.pages.map((page) => ({
+          pages: lspStarterPages.map((page) => ({
             id: page.id,
             name: page.name,
-            component: pageComponents(demoPages[page.id]),
+            component: page.component,
           })),
         },
-        style: demoCss,
+        style: lspStarterCss,
         assetManager: {
           assets: [
             `data:image/svg+xml;charset=utf-8,${encodeURIComponent(handSvg)}`,
@@ -489,7 +655,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
       })
 
       editorRef.current = editor
-      editor.Pages.select(demoProject.startPage)
+      editor.Pages.select(lspStarterPages[0].id)
       editor.BlockManager.get('tabs')?.set('category', 'Extra')
 
       const authFormStyle = 'display:grid;gap:12px;max-width:420px;padding:24px;background:#fff;border:1px solid #d8e3e1;border-radius:12px'
@@ -610,9 +776,64 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
 
       const syncSelectedElement = (component?: Component | null) => {
         const summary = summarizeComponent(component)
+        const motionComponent = findMotionActivityComponent(component)
         setSelectedElement(summary)
+        setSelectedMotionComponent(motionComponent)
+        if (!motionComponent) setMotionNotice('')
         setFlowTargetPageId(summary?.targetPageId ?? '')
         setFlowNotice('')
+        setRightPanel((current) => motionComponent ? 'motion' : current === 'motion' ? 'properties' : current)
+      }
+
+      const installDataComponentDoubleClick = () => {
+        const canvasDocument = editor.Canvas.getDocument()
+        if (!canvasDocument || canvasDoubleClickDocuments.has(canvasDocument)) return
+        canvasDoubleClickDocuments.add(canvasDocument)
+        const openDataComponentOptions = (event: MouseEvent) => {
+          const target = event.target as Element | null
+          if (!target || typeof target.closest !== 'function') return
+          const rootElement = findDataComponentRoot(target)
+          if (!rootElement) return
+          const settings = readDataComponentSettings(rootElement)
+          const component = editor.getWrapper()?.find([
+            `[${DATA_COMPONENT_ATTRIBUTE}]`,
+            '.psl-data-grid',
+            '.psl-data-carousel',
+            '.psl-data-list',
+            '.psl-data-featured',
+          ].join(',')).find((candidate) => candidate.getEl() === rootElement)
+          if (!settings || !component) return
+          event.preventDefault()
+          event.stopPropagation()
+          editingDataComponentRef.current = component
+          editor.select(component)
+          syncSelectedElement(component)
+          setRightPanel('data')
+          setDataComponentEditRequest((current) => ({
+            ...settings,
+            requestId: (current?.requestId ?? 0) + 1,
+          }))
+        }
+        canvasDocument.addEventListener('dblclick', openDataComponentOptions, true)
+        const openMotionComponentOptions = (event: MouseEvent) => {
+          const target = event.target as Element | null
+          const rootElement = target?.closest?.(`[data-motion-activity]`) as HTMLElement | null
+          if (!rootElement) return
+          const component = editor.getWrapper()?.find('[data-motion-activity]')
+            .find((candidate) => candidate.getEl() === rootElement)
+          if (!component) return
+          event.preventDefault()
+          event.stopPropagation()
+          editor.select(component)
+          syncSelectedElement(component)
+          setRightPanel('motion')
+          setMotionDialogOpen(true)
+        }
+        canvasDocument.addEventListener('dblclick', openMotionComponentOptions, true)
+        canvasDoubleClickCleanups.push(() => {
+          canvasDocument.removeEventListener('dblclick', openDataComponentOptions, true)
+          canvasDocument.removeEventListener('dblclick', openMotionComponentOptions, true)
+        })
       }
 
       const applyFitViewport = () => {
@@ -683,12 +904,25 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
         })
       }
 
-      editor.on('canvas:frame:load', stabilizeEditorCanvas)
+      const installEditorViewport = () => {
+        const canvasDocument = editor.Canvas.getDocument()
+        const visibleCanvasHeight = canvasColumnRef.current?.clientHeight ?? DEFAULT_EDITOR_VIEWPORT_HEIGHT_CAP
+        const heightCap = Math.min(960, Math.max(480, visibleCanvasHeight))
+        if (canvasDocument) installEditorCanvasLayoutGuards(canvasDocument, heightCap)
+      }
+      const handleCanvasBodyLoad = () => {
+        stabilizeEditorCanvas()
+        installDataComponentDoubleClick()
+      }
+      editor.on('canvas:frame:load:head', installEditorViewport)
+      editor.on('canvas:frame:load:body', handleCanvasBodyLoad)
       editor.onReady(() => {
         syncPages()
         syncPreviewViewport()
         editor.Css.addRules(dataComponentStyles)
+        installEditorViewport()
         stabilizeEditorCanvas()
+        installDataComponentDoubleClick()
         if (ensureDataDesignPlaceholders(editor) > 0) {
           void editor.store().catch((cause: unknown) => {
             setError(cause instanceof Error ? cause.message : 'No se pudieron guardar los espacios de diseño.')
@@ -760,6 +994,16 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
       editor.on('block:drag:stop', (component: Component | undefined, block: Block) => {
         if (!component) return
         setBlocksOpen(false)
+        if ([
+          MOTION_VIEW_REFERENCE_BLOCK_ID,
+          MOTION_COMPARE_BLOCK_ID,
+          MOTION_ANALYSIS_BLOCK_ID,
+          MOTION_CAPTURE_REFERENCE_BLOCK_ID,
+        ].includes(block.getId())) {
+          editor.select(component)
+          setRightPanel('motion')
+          setMotionDialogOpen(true)
+        }
         if (block.getId() === DATA_COMPONENT_BLOCK_ID) {
           component.remove()
           setDataComponentRequest((current) => current + 1)
@@ -795,7 +1039,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
         window.removeEventListener('keyup', stopTemporaryPan)
       }
       ;(editor as Editor & { __removePanShortcuts?: () => void }).__removePanShortcuts = removePanShortcuts
-      ;(editor as Editor & { __removeCanvasGestures?: () => void }).__removeCanvasGestures = attachCanvasTouchGestures(
+      ;(editor as Editor & { __removeCanvasGestures?: () => void }).__removeCanvasGestures = attachCanvasGestures(
         editor,
         () => {
           canvasZoomModeRef.current = 'manual'
@@ -808,6 +1052,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
 
     return () => {
       canvasResizeObserver?.disconnect()
+      canvasDoubleClickCleanups.forEach((cleanup) => cleanup())
       ;(editorRef.current as (Editor & { __removePanShortcuts?: () => void }) | null)?.__removePanShortcuts?.()
       ;(editorRef.current as (Editor & { __removeCanvasGestures?: () => void }) | null)?.__removeCanvasGestures?.()
       previewControllerRef.current?.stop()
@@ -944,7 +1189,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
       if (!firstImportedId) firstImportedId = id
     })
     if (firstImportedId) editor.Pages.select(firstImportedId)
-    setPageImportMode(null)
+    setPageImportOpen(false)
     void editor.store().catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : 'No se pudieron guardar las páginas importadas.')
     })
@@ -1061,6 +1306,48 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
     })
   }
 
+  function updateDataComponent(
+    templateId: DataComponentTemplateId,
+    tableId: string,
+    mapping: DataComponentMapping,
+    options: DataComponentOptions,
+  ) {
+    const editor = editorRef.current
+    const component = editingDataComponentRef.current
+    if (!editor || !component) return
+    const generatedClasses = new Set([
+      'psl-data-responsive-frame',
+      'psl-data-grid',
+      'psl-data-carousel',
+      'psl-data-list',
+      'psl-data-featured',
+    ])
+    const preservedClasses = component.getClasses().filter((className) => !generatedClasses.has(className))
+    const preservedAttributes = Object.fromEntries(Object.entries(component.getAttributes()).filter(([name]) =>
+      name !== 'class'
+      && name !== 'style'
+      && name !== 'aria-label'
+      && name !== 'tabindex'
+      && name !== DATA_COMPONENT_ATTRIBUTE))
+    const preservedStyles = Object.fromEntries(Object.entries(component.getStyle()).filter(([name]) =>
+      !name.startsWith('--psl-data-')))
+    const replacements = component.replaceWith(createDataComponentMarkup(templateId, tableId, mapping, options))
+    const replacement = replacements[0]
+    editingDataComponentRef.current = null
+    setDataComponentEditRequest(null)
+    if (!replacement) return
+    if (preservedClasses.length) replacement.addClass(preservedClasses)
+    if (Object.keys(preservedAttributes).length) replacement.addAttributes(preservedAttributes)
+    if (Object.keys(preservedStyles).length) replacement.addStyle(preservedStyles)
+    editor.Css.addRules(dataComponentStyles)
+    editor.select(replacement)
+    setSelectedElement(summarizeComponent(replacement))
+    setFlowNotice('Opciones del componente con datos actualizadas.')
+    void editor.store().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : 'No se pudo actualizar el componente con datos.')
+    })
+  }
+
   function handlePreviewRuntimeAction(message: Parameters<typeof applyEditorPreviewAction>[1]) {
     setPreviewSession((current) => {
       if (!current) return current
@@ -1075,6 +1362,27 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
     })
   }
 
+  function handleMotionReference(message: MotionReferenceRuntimeMessage) {
+    const editor = editorRef.current
+    const match = /^(.*)-motion-(\d+)$/.exec(message.activityId)
+    if (!editor || !match) return
+    const page = editor.Pages.get(match[1])
+    const activities = page?.getMainComponent().find(`[data-motion-activity]`) ?? []
+    const component = activities[Number(match[2]) - 1]
+    if (!component) return
+    component.addAttributes({
+      'data-motion-reference-source': 'template',
+      'data-motion-reference-template': encodeURIComponent(JSON.stringify(message.template)),
+    })
+    editor.select(component)
+    setSelectedMotionComponent(component)
+    setMotionNotice('Referencia compilada e incrustada en el proyecto. Cambia a Comparar para utilizarla.')
+    setRightPanel('motion')
+    void editor.store().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar la referencia compilada.')
+    })
+  }
+
   function addPage() {
     const editor = editorRef.current
     if (!editor) return
@@ -1083,6 +1391,27 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
       name: `Página ${pageNumber}`,
       component: '<main><h1>Nueva página</h1><p>Arrastra bloques para comenzar.</p></main>',
     }, { select: true })
+  }
+
+  function openLspStarterProject() {
+    const editor = editorRef.current
+    if (!editor) return
+    const confirmed = window.confirm(
+      '¿Abrir el proyecto “Aprende LSP”? Esto reemplazará las páginas y estilos del sitio abierto. Esta acción no se puede deshacer.',
+    )
+    if (!confirmed) return
+
+    installLspStarterProject(editor)
+    const nextConfig = normalizedSupabaseConfig(lspStarterSupabaseConfig)
+    supabaseConfigRef.current = nextConfig
+    setSupabaseConfig(nextConfig)
+    storeSupabaseConfig(nextConfig)
+    setCreateMenuOpen(false)
+    setTemplateGalleryOpen(false)
+    setFlowNotice('Proyecto “Aprende LSP” abierto y guardado en el editor.')
+    void editor.store().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar el proyecto Aprende LSP.')
+    })
   }
 
   function addTemplatePage(templateId: string) {
@@ -1157,7 +1486,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
                     setCreateMenuPosition(floatingMenuPosition(
                       event.currentTarget.getBoundingClientRect(),
                       196,
-                      168,
+                      150,
                     ))
                     setCreateMenuOpen((open) => !open)
                   }}
@@ -1174,9 +1503,11 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
                       setCreateMenuOpen(false)
                       setTemplateGalleryOpen(true)
                     }} role="menuitem" type="button">Explorar plantillas</button>
-                    <button onClick={() => setPageImportMode('single')} role="menuitem" type="button">Importar página</button>
-                    <button onClick={() => setPageImportMode('multiple')} role="menuitem" type="button">Importar varias páginas</button>
-                    <button onClick={() => setPageImportMode('zip')} role="menuitem" type="button">Importar plantilla ZIP</button>
+                    <button onClick={() => {
+                      setCreateMenuOpen(false)
+                      setPageImportOpen(true)
+                    }} role="menuitem" type="button">Importar</button>
+                    <button onClick={openLspStarterProject} role="menuitem" type="button">Abrir proyecto Aprende LSP</button>
                   </div>
                 )}
               </div>
@@ -1262,6 +1593,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
           )}
           {previewActive && previewSession && (
             <EditorRuntimePreview
+              onMotionReference={handleMotionReference}
               onRuntimeAction={handlePreviewRuntimeAction}
               session={previewSession}
               viewport={previewViewport}
@@ -1302,6 +1634,14 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
               type="button"
             >Propiedades</button>
             <button
+              aria-selected={rightPanel === 'motion'}
+              className={rightPanel === 'motion' ? 'active' : ''}
+              disabled={!selectedMotionComponent}
+              onClick={() => setRightPanel('motion')}
+              role="tab"
+              type="button"
+            >Movimiento</button>
+            <button
               aria-selected={rightPanel === 'flow'}
               className={rightPanel === 'flow' ? 'active' : ''}
               onClick={() => setRightPanel('flow')}
@@ -1324,6 +1664,15 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
             className={`gjs-manager-container gjs-traits-container ${rightPanel === 'properties' ? '' : 'hidden'}`}
             ref={traitsRef}
           />
+          <div className={`gjs-motion-container ${rightPanel === 'motion' ? '' : 'hidden'}`}>
+            <MotionPanel
+              component={selectedMotionComponent}
+              config={supabaseConfig}
+              notice={motionNotice}
+              onOpenData={() => setRightPanel('data')}
+              tables={supabaseConfig.tables}
+            />
+          </div>
           <div className={`gjs-flow-container ${rightPanel === 'flow' ? '' : 'hidden'}`}>
             {previewActive ? (
               <div className="gjs-flow-form">
@@ -1399,6 +1748,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
           <div className={`gjs-data-container ${rightPanel === 'data' ? '' : 'hidden'}`}>
             <SupabaseDataPanel
               config={supabaseConfig}
+              dataComponentEditRequest={dataComponentEditRequest}
               dataComponentRequest={dataComponentRequest}
               editorProjectId={editorProjectId}
               onChange={saveSupabaseConfig}
@@ -1406,6 +1756,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
               onRemoveBinding={removeDataBinding}
               onSaveBinding={saveDataBinding}
               onToggleRepeater={toggleDataRepeater}
+              onUpdateDataComponent={updateDataComponent}
               selectedElement={selectedElement ? {
                 bindingField: selectedElement.bindingField,
                 bindingTarget: selectedElement.bindingTarget ?? defaultBindingTarget(),
@@ -1419,10 +1770,9 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
           </div>
         </aside>
       </div>
-      {pageImportMode && (
+      {pageImportOpen && (
         <PageImportDialog
-          mode={pageImportMode}
-          onClose={() => setPageImportMode(null)}
+          onClose={() => setPageImportOpen(false)}
           onImport={importPages}
         />
       )}
@@ -1437,6 +1787,25 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
           initialName={renamingPage.name}
           onClose={() => setRenamingPage(null)}
           onRename={savePageName}
+        />
+      )}
+      {motionDialogOpen && selectedMotionComponent && (
+        <MotionSettingsDialog
+          component={selectedMotionComponent}
+          config={supabaseConfig}
+          notice={motionNotice}
+          onClose={() => setMotionDialogOpen(false)}
+          onOpenData={() => {
+            setMotionDialogOpen(false)
+            setRightPanel('data')
+          }}
+          onSave={() => {
+            setMotionDialogOpen(false)
+            void editorRef.current?.store().catch((cause: unknown) => {
+              setError(cause instanceof Error ? cause.message : 'No se pudo guardar el componente de movimiento.')
+            })
+          }}
+          tables={supabaseConfig.tables}
         />
       )}
     </main>

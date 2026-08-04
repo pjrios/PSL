@@ -2,7 +2,8 @@
 
 Editor visual modular para convertir pantallas diseñadas en Figma y exportadas
 como HTML/CSS en aplicaciones web navegables. Incluye autenticación con
-Supabase y, en etapas posteriores, incorporará MediaPipe y publicación directa.
+Supabase, análisis de movimiento con MediaPipe y, en etapas posteriores,
+publicación directa.
 
 ## Estado
 
@@ -40,6 +41,8 @@ responsive**. Incluye:
 - Preservación de stylesheets enlazados, media queries, fuentes y assets.
 - Validación de rutas estáticas sensible a mayúsculas antes de descargar.
 - Prueba integral del flujo completo con un fixture compatible con FigmaToCode.
+- Sistema genérico de movimiento con partes editables, modos de análisis,
+  creación de referencias y comparación, además de guardado opcional.
 
 Para cerrar la aceptación externa del Hito 4 falta probar un ZIP producido
 desde un diseño real del equipo y verificar el resultado en una URL de
@@ -106,6 +109,12 @@ módulos y [docs/roadmap.md](docs/roadmap.md) para el progreso.
 
 ## Proyecto de ejemplo
 
+El editor GrapesJS predeterminado abre ahora el starter nativo de aprendizaje de
+Lengua de Señas Panameña con once páginas editables, Flujo, colecciones de la
+base canónica y dos actividades de movimiento. Los artefactos reproducibles y
+la guía de apertura están en
+[`examples/lsp-learning-grapesjs`](examples/lsp-learning-grapesjs/README.md).
+
 `examples/three-screen-demo` contiene Inicio, Catálogo y Práctica junto con CSS
 responsive y un manifiesto válido. `examples/figma-responsive-export` reproduce
 una salida de diseño con HTML en la raíz, CSS enlazado, fuente, SVG y media
@@ -143,5 +152,6 @@ La guía de pantallas impulsadas por datos está en
 [docs/data-driven-pages.md](docs/data-driven-pages.md).
 
 La autenticación permanece separada del núcleo de navegación y las políticas
-RLS siguen siendo la barrera real para proteger datos. MediaPipe se añadirá como
-módulo independiente después de validar este flujo.
+RLS siguen siendo la barrera real para proteger datos. El componente de
+movimiento ejecuta MediaPipe Holistic en el navegador y también funciona sin
+una conexión de datos cuando utiliza una referencia por URL.

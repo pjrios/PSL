@@ -85,8 +85,8 @@ export const authPageTemplateCss = `
 html, body { min-height: 100%; margin: 0; }
 body { color: #17222b; background: #f8faf9; font-family: 'DM Sans', system-ui, sans-serif; }
 button, input { font: inherit; }
-.psl-auth-page { min-height: 100vh; display: grid; grid-template-columns: minmax(320px, .92fr) minmax(500px, 1.08fr); background: #f8faf9; }
-.psl-auth-brand { position: relative; min-height: 100vh; padding: clamp(32px, 5vw, 72px); overflow: hidden; display: flex; flex-direction: column; color: #fff; background: linear-gradient(145deg, #102f36 0%, #155d5b 52%, #1b8580 100%); isolation: isolate; }
+.psl-auth-page { min-height: var(--psl-editor-viewport-height, 100vh); display: grid; grid-template-columns: minmax(320px, .92fr) minmax(500px, 1.08fr); background: #f8faf9; }
+.psl-auth-brand { position: relative; min-height: var(--psl-editor-viewport-height, 100vh); padding: clamp(32px, 5vw, 72px); overflow: hidden; display: flex; flex-direction: column; color: #fff; background: linear-gradient(145deg, #102f36 0%, #155d5b 52%, #1b8580 100%); isolation: isolate; }
 .psl-auth-brand::before { content: ''; position: absolute; width: 540px; height: 540px; right: -250px; top: -210px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; box-shadow: 0 0 0 70px rgba(255,255,255,.035), 0 0 0 140px rgba(255,255,255,.025); z-index: -1; }
 .psl-auth-logo, .psl-auth-mobile-logo { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; font-family: 'Manrope', sans-serif; }
 .psl-auth-logo > span, .psl-auth-mobile-logo > span { width: 38px; height: 38px; display: grid; place-items: center; color: #155d5b; background: #d9fff5; border-radius: 11px; font-weight: 800; }
@@ -102,7 +102,7 @@ button, input { font: inherit; }
 .psl-auth-orbit span:nth-child(1) { top: -5px; left: 53px; }
 .psl-auth-orbit span:nth-child(2) { right: 9px; bottom: 16px; width: 7px; height: 7px; }
 .psl-auth-orbit span:nth-child(3) { left: 24px; top: 45px; width: 6px; height: 6px; }
-.psl-auth-content { min-height: 100vh; padding: clamp(32px, 6vw, 88px); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.psl-auth-content { min-height: var(--psl-editor-viewport-height, 100vh); padding: clamp(32px, 6vw, 88px); display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .psl-auth-mobile-logo { display: none; align-self: flex-start; margin-bottom: 42px; color: #154b4c; }
 .psl-auth-shell { width: min(100%, 490px); }
 .psl-auth-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 38px; padding: 5px; background: #e9efed; border-radius: 13px; }
@@ -141,7 +141,7 @@ button, input { font: inherit; }
 @media (max-width: 700px) {
   .psl-auth-page { display: block; }
   .psl-auth-brand { display: none; }
-  .psl-auth-content { min-height: 100svh; padding: 28px clamp(20px, 7vw, 44px) 30px; justify-content: flex-start; }
+  .psl-auth-content { min-height: var(--psl-editor-viewport-height, 100svh); padding: 28px clamp(20px, 7vw, 44px) 30px; justify-content: flex-start; }
   .psl-auth-mobile-logo { display: flex; }
   .psl-auth-shell { margin: auto 0; }
   .psl-auth-tabs { margin-bottom: 30px; }

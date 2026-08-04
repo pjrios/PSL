@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SupabaseDataPanel } from './SupabaseDataPanel'
 import type { SupabaseEditorConfig } from './supabase-data'
 
@@ -23,9 +23,15 @@ const baseProps = {
   onRemoveBinding: vi.fn(),
   onSaveBinding: vi.fn(),
   onToggleRepeater: vi.fn(),
+  onUpdateDataComponent: vi.fn(),
 }
 
 describe('SupabaseDataPanel user data controls', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
   it('organizes Supabase into collapsible inspector sections', () => {
     render(<SupabaseDataPanel {...baseProps} selectedElement={null} />)
 
@@ -102,6 +108,134 @@ describe('SupabaseDataPanel user data controls', () => {
     expect(onInsertDataComponent).toHaveBeenCalledWith('simple_list', 'profiles-table', expect.objectContaining({
       title: 'display_name',
     }), expect.objectContaining({ mediaKind: 'image', pageSize: 12, desktopColumns: 3, pagination: true }))
+  })
+
+  it('opens existing dynamic options in edit mode and saves them without inserting a duplicate', () => {
+    const onInsertDataComponent = vi.fn()
+    const onUpdateDataComponent = vi.fn()
+    render(<SupabaseDataPanel
+      {...baseProps}
+      dataComponentEditRequest={{
+        mapping: { title: 'display_name' },
+        options: {
+          mediaKind: 'image',
+          desktopColumns: 2,
+          tabletColumns: 1,
+          mobileColumns: 1,
+          pageSize: 6,
+          pagination: false,
+        },
+        requestId: 1,
+        tableId: 'profiles-table',
+        templateId: 'simple_list',
+      }}
+      onInsertDataComponent={onInsertDataComponent}
+      onUpdateDataComponent={onUpdateDataComponent}
+      selectedElement={null}
+    />)
+
+    expect(screen.getByRole('dialog', { name: 'Editar componente con datos' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Título')).toHaveValue('display_name')
+    expect(screen.getByLabelText('Máximo de elementos por página')).toHaveValue(6)
+    expect(screen.getByLabelText('Columnas en escritorio')).toHaveValue(2)
+    expect(screen.getByRole('checkbox')).not.toBeChecked()
+    fireEvent.change(screen.getByLabelText('Máximo de elementos por página'), { target: { value: '9' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(onUpdateDataComponent).toHaveBeenCalledWith('simple_list', 'profiles-table', {
+      title: 'display_name',
+    }, expect.objectContaining({ pageSize: 9, desktopColumns: 2, pagination: false }))
+    expect(onInsertDataComponent).not.toHaveBeenCalled()
+  })
+
+  it('previews the first accessible media URL in the data-component wizard', async () => {
+    const mediaConfig: SupabaseEditorConfig = {
+      ...config,
+      tables: [{
+        id: 'practices-table',
+        name: 'practices',
+        displayName: 'Practices',
+        access: 'public_read',
+        fields: [
+          { id: 'title', name: 'title', type: 'text' },
+          { id: 'media', name: 'media_url', type: 'media' },
+        ],
+        relations: [],
+        setupStatus: 'verified',
+      }],
+    }
+    const fetchSpy = vi.spyOn(window, 'fetch').mockResolvedValue(new Response(JSON.stringify([
+      { media_url: 'https://cdn.example.com/practice.jpg' },
+    ]), { status: 200 }))
+
+    render(<SupabaseDataPanel
+      {...baseProps}
+      config={mediaConfig}
+      dataComponentEditRequest={{
+        mapping: { media: 'media_url', title: 'title' },
+        options: { mediaKind: 'image' },
+        requestId: 1,
+        tableId: 'practices-table',
+        templateId: 'carousel',
+      }}
+      selectedElement={null}
+    />)
+
+    expect(await screen.findByRole('img', { name: 'Vista previa de media_url' }))
+      .toHaveAttribute('src', 'https://cdn.example.com/practice.jpg')
+    expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/rest/v1/practices?'), expect.objectContaining({
+      headers: expect.objectContaining({ apikey: mediaConfig.publishableKey }),
+    }))
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('media_url=not.is.null')
+    expect(screen.getByRole('link', { name: /Abrir URL original/ })).toHaveAttribute(
+      'href',
+      'https://cdn.example.com/practice.jpg',
+    )
+  })
+
+  it('resolves a storage reference to a signed media preview URL', async () => {
+    const storageConfig: SupabaseEditorConfig = {
+      ...config,
+      tables: [{
+        id: 'practices-table', name: 'practices', displayName: 'Practices', access: 'public_read',
+        fields: [{ id: 'media', name: 'media_url', type: 'media' }], relations: [], setupStatus: 'verified',
+      }],
+    }
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => key === 'psl-auth:school.supabase.co'
+        ? JSON.stringify({ access_token: 'teacher-token' })
+        : null),
+    })
+    const fetchSpy = vi.spyOn(window, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        media_url: 'storage://practice-reference-videos/teacher-1/practice-1/reference',
+      }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        signedURL: '/object/sign/practice-reference-videos/teacher-1/practice-1/reference?token=signed',
+      }), { status: 200 }))
+
+    render(<SupabaseDataPanel
+      {...baseProps}
+      config={storageConfig}
+      dataComponentEditRequest={{
+        mapping: { media: 'media_url' }, options: { mediaKind: 'video' }, requestId: 1,
+        tableId: 'practices-table', templateId: 'carousel',
+      }}
+      selectedElement={null}
+    />)
+
+    expect(await screen.findByLabelText('Vista previa de media_url')).toHaveAttribute(
+      'src',
+      'https://school.supabase.co/storage/v1/object/sign/practice-reference-videos/teacher-1/practice-1/reference?token=signed',
+    )
+    expect(fetchSpy).toHaveBeenNthCalledWith(2,
+      'https://school.supabase.co/storage/v1/object/sign/practice-reference-videos/teacher-1/practice-1/reference',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer teacher-token' }),
+        body: JSON.stringify({ expiresIn: 3_600 }),
+      }),
+    )
   })
 
   it('allows visual edits to installed fields and previews an ALTER migration', () => {

@@ -68,7 +68,7 @@ export function applyEditorPreviewAction(
 
     const destination = {
       pageId: message.targetPage,
-      context: message.context ?? {},
+      context: { ...current.context, ...(message.context ?? {}) },
     }
     return {
       session: {

@@ -82,8 +82,25 @@
 - [x] Permitir que un campo de medios se muestre como imagen o video.
 - [ ] Añadir y editar filas desde PSL mediante formularios protegidos.
 
-MediaPipe y la publicación directa en Cloudflare se planificarán sobre el mismo
-contrato de proyecto versionado.
+La publicación directa en Cloudflare continuará sobre el mismo contrato de
+proyecto versionado.
+
+## Análisis de movimiento
+
+- [x] Añadir una actividad genérica y partes editables de entrada, controles y resultados a GrapesJS.
+- [x] Separar la configuración condicional en el inspector Movimiento: entrada, referencia, procesamiento, resultado y guardado.
+- [x] Admitir los modos analizar, crear referencia y comparar.
+- [x] Resolver referencias desde URL o desde campos de una colección existente.
+- [x] Ejecutar MediaPipe Holistic en un Web Worker con versión fijada.
+- [x] Normalizar, filtrar por confianza, suavizar y reducir secuencias a puntos clave antes de alinearlas mediante DTW.
+- [x] Mostrar puntaje general, componentes y retroalimentación inicial localizada por fase.
+- [x] Guardar opcionalmente el resultado en una colección Supabase mapeada.
+- [x] Incluir la misma funcionalidad en vista previa y exportación ZIP.
+- [ ] Calibrar pesos y umbrales con evaluaciones de señantes conocedores.
+- [x] Compilar plantillas de referencia localmente desde la vista previa e incrustarlas en el proyecto.
+- [ ] Añadir revisión experta, estados de aprobación y versionado de plantillas.
+- [ ] Admitir varias referencias aprobadas por movimiento.
+- [ ] Validar rendimiento y precisión en los navegadores y dispositivos objetivo.
 
 ## Migración a GrapesJS
 

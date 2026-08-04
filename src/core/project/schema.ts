@@ -60,6 +60,7 @@ export const DataSourceSchema = z.discriminatedUnion('type', [
     publishedOnly: z.boolean().default(true),
     requiresAuth: z.boolean().optional(),
     orderColumn: z.string().regex(/^[a-z][a-z0-9_]*$/).optional(),
+    orderDirection: z.enum(['asc', 'desc']).optional(),
   }),
 ])
 
@@ -88,6 +89,10 @@ export const DataRepeaterSchema = z.object({
   itemContext: z.string().min(1),
   pageSize: z.number().int().min(1).max(100).optional(),
   pagination: z.boolean().optional(),
+  emptyMessage: z.string().max(300).optional(),
+  errorMessage: z.string().max(300).optional(),
+  userFilterColumn: z.string().regex(/^[a-z][a-z0-9_]*$/).optional(),
+  includeUnpublished: z.boolean().optional(),
 })
 
 export const ConnectionSchema = z.object({
@@ -169,6 +174,125 @@ export const ElementOverrideSchema = z.object({
   }).optional(),
 })
 
+const MotionFeatureSelectionSchema = z.object({
+  hands: z.boolean().default(true),
+  pose: z.boolean().default(true),
+  face: z.boolean().default(false),
+})
+
+const MotionFrameSchema = z.object({
+  facePosture: z.array(z.number()),
+  handShape: z.array(z.number()),
+  location: z.array(z.number()),
+  orientation: z.array(z.number()),
+  quality: z.number().min(0).max(1).optional(),
+  t: z.number().min(0),
+  trajectory: z.array(z.number()),
+})
+
+const MotionLandmarkSchema = z.object({
+  visibility: z.number().optional(),
+  x: z.number(),
+  y: z.number(),
+  z: z.number().optional(),
+})
+
+const MotionLandmarkFrameSchema = z.object({
+  faceLandmarks: z.array(z.array(MotionLandmarkSchema)),
+  height: z.number().positive(),
+  leftHandLandmarks: z.array(z.array(MotionLandmarkSchema)),
+  poseLandmarks: z.array(z.array(MotionLandmarkSchema)),
+  replaySampled: z.boolean().optional(),
+  rightHandLandmarks: z.array(z.array(MotionLandmarkSchema)),
+  t: z.number().min(0),
+  width: z.number().positive(),
+})
+
+const MotionTemplateSchema = z.object({
+  approvedAt: z.string().optional(),
+  durationMs: z.number().nonnegative(),
+  frames: z.array(MotionFrameSchema).min(1),
+  landmarkFrames: z.array(MotionLandmarkFrameSchema).optional(),
+  sourceSegment: z.object({
+    endSeconds: z.number().positive(),
+    startSeconds: z.number().min(0),
+  }).optional(),
+  sourceCrop: z.object({
+    height: z.number().positive().max(1),
+    width: z.number().positive().max(1),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+  }).refine((crop) => crop.x + crop.width <= 1.000001
+    && crop.y + crop.height <= 1.000001, 'The source crop must stay inside the video.').optional(),
+  version: z.literal(2),
+})
+
+const MotionReferenceSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('none') }),
+  z.object({ type: z.literal('template'), template: MotionTemplateSchema }),
+  z.object({
+    type: z.literal('url'),
+    url: z.string().url().refine((value) => {
+      const protocol = new URL(value).protocol
+      return protocol === 'http:' || protocol === 'https:'
+    }, 'Motion reference URLs must use http or https.'),
+  }),
+  z.object({
+    type: z.literal('data'),
+    dataSourceId: z.string().min(1),
+    contextKey: z.string().min(1).default('record'),
+    recordMode: z.enum(['context', 'first', 'last', 'specific']).default('context'),
+    recordId: z.string().min(1).optional(),
+    videoField: z.string().min(1),
+    templateField: z.string().min(1),
+  }),
+])
+
+const MotionInputSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('camera'),
+    durationMs: z.number().int().min(1_000).max(10_000),
+    facingMode: z.enum(['user', 'environment']).default('user'),
+  }),
+  z.object({
+    type: z.literal('element'),
+    durationMs: z.number().int().min(1_000).max(10_000),
+    selector: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('url'),
+    url: z.string().url().refine((value) => ['http:', 'https:'].includes(new URL(value).protocol)),
+  }),
+])
+
+const MotionPersistenceSchema = z.object({
+  dataSourceId: z.string().min(1),
+  contextKey: z.string().min(1).default('record'),
+  relationField: z.string().min(1).optional(),
+  scoreField: z.string().min(1),
+  feedbackField: z.string().min(1),
+  resultField: z.string().min(1),
+  durationField: z.string().min(1),
+})
+
+export const MotionActivitySchema = z.object({
+  id: z.string().min(1),
+  pageId: z.string().min(1),
+  elementId: z.string().min(1),
+  mode: z.enum(['analyze', 'reference', 'compare']).default('compare'),
+  componentType: z.enum(['analyze', 'reference-view', 'compare', 'reference-capture']).optional(),
+  input: MotionInputSchema,
+  reference: MotionReferenceSchema,
+  features: MotionFeatureSelectionSchema,
+  processing: z.object({
+    checkpointReduction: z.boolean().default(true),
+    minConfidence: z.number().min(0).max(1).default(0.5),
+    smoothing: z.number().int().min(1).max(9).default(3),
+  }).default({ checkpointReduction: true, minConfidence: 0.5, smoothing: 3 }),
+  passingScore: z.number().min(0).max(100),
+  persistence: MotionPersistenceSchema.optional(),
+})
+
 const projectFields = {
   name: z.string().min(1),
   startPage: z.string().min(1),
@@ -178,6 +302,7 @@ const projectFields = {
   bindings: z.array(DataBindingSchema).optional(),
   repeaters: z.array(DataRepeaterSchema).optional(),
   authentication: AuthenticationSchema.optional(),
+  motionActivities: z.array(MotionActivitySchema).optional(),
 }
 
 function validateReferences(
@@ -190,6 +315,7 @@ function validateReferences(
     bindings?: Array<z.infer<typeof DataBindingSchema>>
     repeaters?: Array<z.infer<typeof DataRepeaterSchema>>
     authentication?: z.infer<typeof AuthenticationSchema>
+    motionActivities?: Array<z.infer<typeof MotionActivitySchema>>
   },
   context: z.RefinementCtx,
 ) {
@@ -343,6 +469,38 @@ function validateReferences(
     }
     overrideKeys.add(key)
   })
+
+  const motionIds = new Set<string>()
+  project.motionActivities?.forEach((activity, index) => {
+    if (motionIds.has(activity.id)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['motionActivities', index, 'id'],
+        message: 'Motion activity IDs must be unique.',
+      })
+    }
+    motionIds.add(activity.id)
+    if (!uniquePageIds.has(activity.pageId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['motionActivities', index, 'pageId'],
+        message: 'Motion activities must reference an existing page.',
+      })
+    }
+    const referencedSources = [
+      activity.reference.type === 'data' ? activity.reference.dataSourceId : undefined,
+      activity.persistence?.dataSourceId,
+    ].filter((value): value is string => Boolean(value))
+    referencedSources.forEach((dataSourceId) => {
+      if (!project.dataSources?.some((source) => source.id === dataSourceId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['motionActivities', index],
+          message: 'Motion activities must reference existing data sources.',
+        })
+      }
+    })
+  })
 }
 
 const LegacyProjectSchema = z.object({
@@ -371,6 +529,7 @@ export type ProjectConnection = z.infer<typeof ConnectionSchema>
 export type DataSource = z.infer<typeof DataSourceSchema>
 export type DataBinding = z.infer<typeof DataBindingSchema>
 export type DataRepeater = z.infer<typeof DataRepeaterSchema>
+export type MotionActivity = z.infer<typeof MotionActivitySchema>
 export type NavigationContextValue = z.infer<typeof NavigationContextValueSchema>
 export type NavigationContext = Record<string, NavigationContextValue>
 export type VisualBuilderProject = z.infer<typeof ProjectV2Schema>

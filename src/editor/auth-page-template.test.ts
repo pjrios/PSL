@@ -21,6 +21,6 @@ describe('auth page template', () => {
     expect(authPageTemplateCss).toContain('@media (max-width: 700px)')
     expect(authPageTemplateCss).toContain('@media (max-width: 380px)')
     expect(authPageTemplateCss).toContain('@media (prefers-reduced-motion: reduce)')
-    expect(authPageTemplateCss).toContain('min-height: 100svh')
+    expect(authPageTemplateCss).toContain('var(--psl-editor-viewport-height, 100svh)')
   })
 })

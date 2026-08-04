@@ -7,10 +7,15 @@ import {
 } from '../../../runtime/navigation-runtime'
 import type { ProjectExporter } from '../port'
 import { relativeProjectPath } from './path-utils'
+import {
+  createMotionConfigSource,
+  createMotionRuntimeSource,
+} from '../../../runtime/motion-runtime'
 
 const textDecoder = new TextDecoder()
 const runtimePath = 'psl-runtime/navigation.js'
 const overridesPath = 'psl-runtime/overrides.css'
+const motionRuntimePath = 'motion-runtime/analysis.js'
 
 function bytesToBase64(bytes: Uint8Array) {
   let binary = ''
@@ -29,7 +34,7 @@ function injectNavigationRuntime(
   page: ProjectPage,
 ) {
   const document = new DOMParser().parseFromString(markup, 'text/html')
-  document.querySelectorAll('[data-psl-config], [data-psl-runtime], [data-psl-overrides]')
+  document.querySelectorAll('[data-psl-config], [data-psl-runtime], [data-psl-overrides], [data-motion-config], [data-motion-runtime]')
     .forEach((node) => node.remove())
   applyContentOverrides(document, bundle.manifest, page.id)
 
@@ -70,6 +75,21 @@ function injectNavigationRuntime(
   runtimeScript.src = relativeProjectPath(page.file, runtimePath)
   document.body.append(configScript, runtimeScript)
 
+  if (bundle.manifest.motionActivities?.some((activity) => activity.pageId === page.id)) {
+    const motionConfig = document.createElement('script')
+    motionConfig.dataset.motionConfig = 'true'
+    motionConfig.textContent = createMotionConfigSource({
+      activities: bundle.manifest.motionActivities,
+      authentication: bundle.manifest.authentication,
+      currentPage: page.id,
+      dataSources: bundle.manifest.dataSources,
+    })
+    const motionRuntime = document.createElement('script')
+    motionRuntime.dataset.motionRuntime = 'true'
+    motionRuntime.src = relativeProjectPath(page.file, motionRuntimePath)
+    document.body.append(motionConfig, motionRuntime)
+  }
+
   return `<!doctype html>\n${document.documentElement.outerHTML}`
 }
 
@@ -107,7 +127,8 @@ export class ZipProjectExporter implements ProjectExporter {
     const pagesByFile = new Map(bundle.manifest.pages.map((page) => [page.file, page]))
 
     for (const file of bundle.files) {
-      if (file.path === 'project.json' || file.path === runtimePath || file.path === overridesPath) {
+      if (file.path === 'project.json' || file.path === runtimePath || file.path === overridesPath
+        || file.path === motionRuntimePath) {
         continue
       }
 
@@ -123,6 +144,9 @@ export class ZipProjectExporter implements ProjectExporter {
 
     archive.file('project.json', JSON.stringify(bundle.manifest, null, 2))
     archive.file(runtimePath, createNavigationRuntimeSource())
+    if (bundle.manifest.motionActivities?.length) {
+      archive.file(motionRuntimePath, createMotionRuntimeSource())
+    }
     const overrideCss = createOverrideCss(bundle.manifest)
     if (overrideCss) archive.file(overridesPath, overrideCss)
     if (!pagesByFile.has('index.html')) {

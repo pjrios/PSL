@@ -4,6 +4,8 @@ import {
   isNavigationRuntimeMessage,
 } from '../runtime/navigation-runtime'
 import type { NavigationRuntimeMessage } from '../runtime/navigation-runtime'
+import { isMotionReferenceRuntimeMessage } from '../runtime/motion-runtime'
+import type { MotionReferenceRuntimeMessage } from '../runtime/motion-runtime'
 import type { EditorPreviewSession } from './editor-preview-session'
 import {
   editorPreviewPageAccess,
@@ -12,6 +14,7 @@ import {
 } from './editor-preview-session'
 
 interface EditorRuntimePreviewProps {
+  onMotionReference?: (message: MotionReferenceRuntimeMessage) => void
   onRuntimeAction: (message: NavigationRuntimeMessage) => void
   session: EditorPreviewSession
   viewport: EditorPreviewViewport
@@ -23,6 +26,7 @@ export interface EditorPreviewViewport {
 }
 
 export function EditorRuntimePreview({
+  onMotionReference,
   onRuntimeAction,
   session,
   viewport,
@@ -53,11 +57,12 @@ export function EditorRuntimePreview({
     function receiveRuntimeMessage(event: MessageEvent<unknown>) {
       if (event.source !== iframeRef.current?.contentWindow) return
       if (isNavigationRuntimeMessage(event.data)) onRuntimeAction(event.data)
+      if (isMotionReferenceRuntimeMessage(event.data)) onMotionReference?.(event.data)
     }
 
     window.addEventListener('message', receiveRuntimeMessage)
     return () => window.removeEventListener('message', receiveRuntimeMessage)
-  }, [onRuntimeAction])
+  }, [onMotionReference, onRuntimeAction])
 
   useEffect(() => {
     const container = previewRef.current
@@ -159,6 +164,7 @@ export function EditorRuntimePreview({
             }}
           >
             <iframe
+              allow="camera"
               key={`${session.pageId}-${session.history.length}`}
               ref={iframeRef}
               sandbox="allow-forms allow-same-origin allow-scripts"

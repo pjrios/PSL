@@ -12,6 +12,10 @@ import {
   createNavigationRuntimeSource,
 } from '../../runtime/navigation-runtime'
 import { assignStableElementIds } from './element-identifiers'
+import {
+  createMotionConfigSource,
+  createMotionRuntimeSource,
+} from '../../runtime/motion-runtime'
 
 const textDecoder = new TextDecoder()
 
@@ -226,6 +230,22 @@ export function buildPreviewDocument(
     runtimeScript.dataset.pslRuntime = 'true'
     runtimeScript.textContent = createNavigationRuntimeSource()
     document.body.append(configScript, runtimeScript)
+
+    if (bundle.manifest.motionActivities?.some((activity) => activity.pageId === page.id)) {
+      const motionConfig = document.createElement('script')
+      motionConfig.dataset.motionConfig = 'true'
+      motionConfig.textContent = createMotionConfigSource({
+        activities: bundle.manifest.motionActivities,
+        authentication: bundle.manifest.authentication,
+        currentContext: options.context,
+        currentPage: page.id,
+        dataSources: bundle.manifest.dataSources,
+      })
+      const motionRuntime = document.createElement('script')
+      motionRuntime.dataset.motionRuntime = 'true'
+      motionRuntime.textContent = createMotionRuntimeSource()
+      document.body.append(motionConfig, motionRuntime)
+    }
   }
 
   return `<!doctype html>\n${document.documentElement.outerHTML}`

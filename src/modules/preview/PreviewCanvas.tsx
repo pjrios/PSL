@@ -237,10 +237,11 @@ export function PreviewCanvas({
           <div className="preview-error" role="alert">{previewError}</div>
         ) : (
           <iframe
+            allow={mode === 'test' ? 'camera' : undefined}
             ref={iframeRef}
             key={`${page.id}-${viewport}-${mode}`}
             onLoad={connectSelectionEvents}
-            sandbox={mode === 'edit' ? 'allow-same-origin' : 'allow-scripts'}
+            sandbox={mode === 'edit' ? 'allow-same-origin' : 'allow-same-origin allow-scripts'}
             srcDoc={preview}
             style={{ width: viewportWidths[viewport] }}
             title={`Vista previa de ${page.name}`}
