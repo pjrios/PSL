@@ -14,7 +14,16 @@ export const MOTION_INPUT_BLOCK_ID = 'motion-input'
 export const MOTION_CONTROLS_BLOCK_ID = 'motion-controls'
 export const MOTION_RESULTS_BLOCK_ID = 'motion-results'
 
-const motionIcon = '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="m24 13-7 10 7 6 7-6-7-10Zm0 16v13m0-7-8 7m8-7 8 7M17 23l-9-4m23 4 9-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>'
+export type MotionComponentType = 'analyze' | 'reference-view' | 'compare' | 'reference-capture'
+
+const motionBlockIcons: Record<MotionComponentType, string> = {
+  'reference-view': '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="8" width="38" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="m20 17 11 6.5L20 30V17Z" fill="currentColor"/><path d="M15 43h18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.5"/></svg>',
+  compare: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="9" width="17" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><rect x="27" y="9" width="17" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M17 19h14m-4-4 4 4-4 4M31 29H17m4 4-4-4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/></svg>',
+  analyze: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="7" width="38" height="34" rx="5" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M11 31h5l4-12 6 17 5-11 3 6h4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/><circle cx="20" cy="19" r="2" fill="currentColor"/><circle cx="31" cy="25" r="2" fill="currentColor"/></svg>',
+  'reference-capture': '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M17 7H8v9M31 7h9v9M17 41H8v-9m23 9h9v-9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/><rect x="13" y="14" width="22" height="20" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="24" cy="24" r="5" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M24 21v6m-3-3h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.5"/></svg>',
+}
+
+const motionIcon = motionBlockIcons.analyze
 
 export const motionComponentStyles = `
 .motion-activity{display:grid;align-content:start;gap:1rem;width:100%;height:auto!important;min-width:0;max-width:100%;padding:clamp(1rem,3vw,1.5rem);color:#17211f;background:linear-gradient(145deg,#fff,#f5f8f7);border:1px solid #d8e2e0;border-radius:1rem;box-shadow:0 .8rem 2rem rgba(20,48,44,.08)}
@@ -126,8 +135,6 @@ export function motionResultsMarkup() {
     <a data-motion-download class="motion-results__download" hidden>Descargar plantilla</a>
   </div>`
 }
-
-export type MotionComponentType = 'analyze' | 'reference-view' | 'compare' | 'reference-capture'
 
 export const motionComponentTypes: Array<{
   description: string
@@ -292,7 +299,7 @@ export function createMotionAnalysisPlugin(): Plugin {
         category: 'Movimiento',
         attributes: { title: definition.description },
         content: motionAnalysisMarkup(type),
-        media: motionIcon,
+        media: motionBlockIcons[type],
       })
     })
     const upgradeAll = () => editor.Pages.getAll().forEach((page) => {

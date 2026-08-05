@@ -97,6 +97,7 @@ import {
 } from './motion-analysis'
 import { MotionPanel, MotionSettingsDialog } from './MotionPanel'
 import { AuthSettingsDialog } from './AuthSettingsDialog'
+import { configureStarterBlocks } from './starter-blocks'
 
 function normalizedGrapesProjectData(value: Record<string, unknown>): ProjectData {
   return {
@@ -773,6 +774,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
   const currentCanvasDeviceRef = useRef('desktop')
   const editingDataComponentRef = useRef<Component | null>(null)
   const authSettingsComponentRef = useRef<Component | null>(null)
+  const draggedBlockRef = useRef<Block | null>(null)
   const panToolLockedRef = useRef(false)
   const resizeNoticeTimerRef = useRef<number | undefined>(undefined)
   const initialSupabaseConfigRef = useRef(EMPTY_SUPABASE_CONFIG)
@@ -784,6 +786,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
   const [activePageId, setActivePageId] = useState<string>(BLANK_PAGE.id)
   const [rightPanel, setRightPanel] = useState<'styles' | 'properties' | 'motion' | 'flow' | 'data'>('styles')
   const [blocksOpen, setBlocksOpen] = useState(false)
+  const [blockDropActive, setBlockDropActive] = useState(false)
   const [dataComponentEditRequest, setDataComponentEditRequest] = useState<DataComponentEditRequest | null>(null)
   const [dataComponentRequest, setDataComponentRequest] = useState(0)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
@@ -1028,6 +1031,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
           setDataComponentRequest((current) => current + 1)
         },
       })
+      configureStarterBlocks(editor)
 
       const previewController = createPreviewController({
         onStart: () => {
@@ -1372,11 +1376,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
         showResizeDimensions(event)
         resizeNoticeTimerRef.current = window.setTimeout(() => setResizeDimensions(''), 900)
       })
-      editor.on('block:click', () => {
-        setBlocksOpen(false)
-      })
-      editor.on('block:drag:stop', (component: Component | undefined, block: Block) => {
-        if (!component) return
+      const completeBlockInsertion = (component: Component, block: Block) => {
         setBlocksOpen(false)
         if ([
           MOTION_VIEW_REFERENCE_BLOCK_ID,
@@ -1392,6 +1392,21 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
           component.remove()
           setDataComponentRequest((current) => current + 1)
         }
+      }
+      editor.on('block:click', () => {
+        draggedBlockRef.current = null
+        setBlockDropActive(false)
+        setBlocksOpen(false)
+      })
+      editor.on('block:drag:start', (block: Block) => {
+        draggedBlockRef.current = block
+        setBlockDropActive(true)
+      })
+      editor.on('block:drag:stop', (component: Component | undefined, block: Block) => {
+        draggedBlockRef.current = null
+        setBlockDropActive(false)
+        if (!component) return
+        completeBlockInsertion(component, block)
       })
       if (typeof ResizeObserver !== 'undefined' && canvasColumnRef.current) {
         canvasResizeObserver = new ResizeObserver(() => {
@@ -1455,6 +1470,68 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [blocksOpen])
+
+  useEffect(() => {
+    if (!blockDropActive) return
+    const clearAbandonedDrop = (event: Event) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('.gjs-canvas-block-drop')) return
+      draggedBlockRef.current = null
+      setBlockDropActive(false)
+    }
+    window.addEventListener('dragend', clearAbandonedDrop)
+    window.addEventListener('pointerup', clearAbandonedDrop)
+    return () => {
+      window.removeEventListener('dragend', clearAbandonedDrop)
+      window.removeEventListener('pointerup', clearAbandonedDrop)
+    }
+  }, [blockDropActive])
+
+  function beginBlockPointerDrag(target: EventTarget | null) {
+    const editor = editorRef.current
+    const blockElement = target instanceof Element ? target.closest('.gjs-block') : null
+    if (!editor || !blockElement) return
+    const title = blockElement.getAttribute('title') ?? ''
+    const block = editor.BlockManager.getAll().models.find((candidate) => {
+      const attributes = candidate.get('attributes') as { title?: string } | undefined
+      return String(attributes?.title ?? candidate.getLabel()) === title
+    })
+    if (!block) return
+    draggedBlockRef.current = block
+    setBlockDropActive(true)
+  }
+
+  function dropBlockOnCanvas() {
+    const editor = editorRef.current
+    const block = draggedBlockRef.current
+    draggedBlockRef.current = null
+    setBlockDropActive(false)
+    if (!editor || !block) return
+
+    const blockContent = block.getContent()
+    const content = typeof blockContent === 'function' ? blockContent() : blockContent
+    if (!content) return
+    const wrapper = editor.getWrapper()
+    if (!wrapper) return
+    const component = wrapper.append(content)[0]
+    if (!component) return
+
+    editor.select(component)
+    setBlocksOpen(false)
+    if ([
+      MOTION_VIEW_REFERENCE_BLOCK_ID,
+      MOTION_COMPARE_BLOCK_ID,
+      MOTION_ANALYSIS_BLOCK_ID,
+      MOTION_CAPTURE_REFERENCE_BLOCK_ID,
+    ].includes(block.getId())) {
+      setRightPanel('motion')
+      setMotionDialogOpen(true)
+    }
+    if (block.getId() === DATA_COMPONENT_BLOCK_ID) {
+      component.remove()
+      setDataComponentRequest((current) => current + 1)
+    }
+  }
 
   function setManualCanvasZoom(nextZoom: number) {
     const editor = editorRef.current
@@ -1874,11 +1951,12 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
         </div>
       </header>
 
-      <div className="gjs-workspace-grid">
-        <aside className="gjs-left-panel" onClick={() => {
+      <div className={`gjs-workspace-grid ${blocksOpen ? 'blocks-open' : ''}`}>
+        <aside className={`gjs-left-panel ${blocksOpen ? 'is-inserting' : ''}`} onClick={() => {
           setCreateMenuOpen(false)
           setPageMenuId(null)
         }}>
+          <div className="gjs-left-organizer" hidden={blocksOpen}>
           <section className="gjs-sidebar-section gjs-pages-section">
             <div className="gjs-sidebar-heading">
               <strong>Páginas</strong>
@@ -1958,13 +2036,63 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
             <div className="gjs-manager-container gjs-layers-container" ref={layersRef} />
           </section>
 
-          <button className="gjs-add-blocks" onClick={() => setBlocksOpen((open) => !open)} type="button">
+          <button
+            aria-expanded={blocksOpen}
+            className="gjs-add-blocks"
+            onClick={() => setBlocksOpen(true)}
+            type="button"
+          >
             <span aria-hidden="true">+</span> Añadir
           </button>
+          </div>
+
+          <section
+            aria-label="Añadir elementos"
+            className="gjs-insert-panel"
+            hidden={!blocksOpen}
+          >
+            <div className="gjs-insert-heading">
+              <button aria-label="Volver a páginas y capas" onClick={() => setBlocksOpen(false)} type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+              </button>
+              <div>
+                <strong>Añadir</strong>
+                <span>Selecciona o arrastra un elemento.</span>
+              </div>
+              <button aria-label="Cerrar Añadir" onClick={() => setBlocksOpen(false)} type="button">×</button>
+            </div>
+            <div
+              className="gjs-manager-container gjs-insert-blocks"
+              onPointerDownCapture={(event) => beginBlockPointerDrag(event.target)}
+              ref={blocksRef}
+            />
+          </section>
         </aside>
 
         <section className="gjs-canvas-column" ref={canvasColumnRef}>
           <div className="grapes-editor" ref={canvasRef} />
+          {blockDropActive && (
+            <div
+              aria-hidden="true"
+              className="gjs-canvas-block-drop"
+              onDragOver={(event) => {
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'copy'
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                dropBlockOnCanvas()
+              }}
+              onPointerUp={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                dropBlockOnCanvas()
+              }}
+            >
+              <span>Suelta para añadir a la página</span>
+            </div>
+          )}
           {!previewActive && (
             <>
             {resizeDimensions && <output aria-live="polite" className="gjs-resize-dimensions">{resizeDimensions}</output>}
@@ -2008,22 +2136,6 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
               viewport={previewViewport}
             />
           )}
-          <div
-            aria-hidden={!blocksOpen}
-            className={`gjs-blocks-backdrop ${blocksOpen ? 'open' : ''}`}
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setBlocksOpen(false)
-            }}
-            role="presentation"
-          >
-            <section aria-label="Seleccionar qué añadir" aria-modal="true" className="gjs-blocks-dialog" role="dialog">
-              <div className="gjs-drawer-heading">
-                <div><strong>Añadir</strong><span>Selecciona un elemento o arrástralo a la página.</span></div>
-                <button aria-label="Cerrar bloques" onClick={() => setBlocksOpen(false)} type="button">×</button>
-              </div>
-              <div className="gjs-manager-container" ref={blocksRef} />
-            </section>
-          </div>
         </section>
 
         <aside className="gjs-right-panel">

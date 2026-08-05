@@ -32,17 +32,24 @@ describe('motion editor contract', () => {
     document.body.append(container)
     const editor = grapesjs.init({ container, headless: true, plugins: [createMotionAnalysisPlugin()] })
 
-    expect([
+    const motionBlockIds = [
       MOTION_VIEW_REFERENCE_BLOCK_ID,
       MOTION_COMPARE_BLOCK_ID,
       MOTION_ANALYSIS_BLOCK_ID,
       MOTION_CAPTURE_REFERENCE_BLOCK_ID,
-    ].map((id) => editor.BlockManager.get(id)?.get('label'))).toEqual([
+    ]
+    expect(motionBlockIds.map((id) => editor.BlockManager.get(id)?.get('label'))).toEqual([
       'Ver referencia',
       'Comparar movimientos',
       'Analizar movimiento',
       'Capturar referencia',
     ])
+    const motionBlockMedia = motionBlockIds.map((id) => String(editor.BlockManager.get(id)?.get('media')))
+    expect(new Set(motionBlockMedia).size).toBe(4)
+    motionBlockMedia.forEach((media) => {
+      expect(media).toContain('<svg')
+      expect(media).toContain('currentColor')
+    })
     expect(documentWith(motionAnalysisMarkup('reference-view')).querySelector('[data-motion-activity]')
       ?.getAttribute('data-motion-component-type')).toBe('reference-view')
     expect(documentWith(motionAnalysisMarkup('reference-view')).querySelector('[data-motion-reference-replay]'))

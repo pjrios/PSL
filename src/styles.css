@@ -290,6 +290,7 @@ body {
   grid-template-columns: 240px minmax(0, 1fr) 300px;
   min-height: 0;
 }
+.gjs-workspace-grid.blocks-open { grid-template-columns: 320px minmax(0, 1fr) 300px; }
 .gjs-left-panel,
 .gjs-right-panel {
   min-width: 0;
@@ -300,6 +301,14 @@ body {
 }
 .gjs-left-panel { border-right: 1px solid var(--ve-border); }
 .gjs-right-panel { border-left: 1px solid var(--ve-border); }
+.gjs-left-organizer {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.gjs-left-organizer[hidden],
+.gjs-insert-panel[hidden] { display: none; }
 .gjs-sidebar-section { min-height: 0; border-bottom: 1px solid var(--ve-border); }
 .gjs-pages-section { flex: 0 0 auto; max-height: 230px; overflow: auto; }
 .gjs-layers-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -415,8 +424,80 @@ body {
 }
 .gjs-add-blocks:hover { background: var(--ve-purple-hover); }
 
+.gjs-insert-panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ve-panel);
+}
+.gjs-insert-heading {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border-bottom: 1px solid var(--ve-border);
+}
+.gjs-insert-heading > div { min-width: 0; display: grid; gap: 3px; }
+.gjs-insert-heading strong { color: var(--ve-white); font-size: var(--ve-text-md); }
+.gjs-insert-heading span {
+  overflow: hidden;
+  color: var(--ve-muted);
+  font-size: var(--ve-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gjs-insert-heading button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--ve-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 20px;
+}
+.gjs-insert-heading button:hover { color: white; background: var(--ve-gray); }
+.gjs-insert-heading svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+.gjs-insert-blocks { flex: 1; }
+
 .gjs-canvas-column { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--ve-black); }
 .grapes-editor { width: 100%; height: 100%; overflow: hidden; }
+.gjs-canvas-block-drop {
+  position: absolute;
+  z-index: 18;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: color-mix(in srgb, var(--ve-purple) 12%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--ve-purple) 78%, white);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 999px rgba(8, 9, 12, .12);
+}
+.gjs-canvas-block-drop span {
+  padding: 9px 13px;
+  background: color-mix(in srgb, var(--ve-purple) 90%, #111216);
+  border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .38);
+  font-size: var(--ve-text-sm);
+  font-weight: 800;
+  pointer-events: none;
+}
 .grapes-editor .gjs-editor-cont,
 .grapes-editor .gjs-editor,
 .grapes-editor .gjs-cv-canvas { width: 100%; height: 100%; }
@@ -666,37 +747,6 @@ body {
   border: 0;
   background: white;
 }
-.gjs-blocks-backdrop {
-  position: fixed;
-  z-index: 80;
-  inset: 0;
-  display: none;
-  place-items: center;
-  padding: 24px;
-  background: rgba(5, 6, 9, .72);
-  backdrop-filter: blur(3px);
-}
-.gjs-blocks-backdrop.open { display: grid; }
-.gjs-blocks-dialog {
-  width: min(900px, calc(100vw - 48px));
-  height: min(720px, calc(100vh - 48px));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--ve-panel);
-  border: 1px solid #3c3e46;
-  border-radius: 12px;
-  box-shadow: 0 28px 80px rgba(0, 0, 0, .5);
-}
-.gjs-blocks-dialog .gjs-drawer-heading {
-  min-height: 64px;
-  padding: 0 18px 0 22px;
-  border-bottom: 1px solid var(--ve-border);
-}
-.gjs-blocks-dialog .gjs-drawer-heading > div { display: grid; gap: 3px; }
-.gjs-blocks-dialog .gjs-drawer-heading span { color: var(--ve-muted); font-size: var(--ve-text-xs); font-weight: 400; }
-.gjs-blocks-dialog .gjs-manager-container { flex: 1; min-height: 0; overflow: auto; }
-
 .gjs-inspector-tabs {
   flex: 0 0 auto;
   height: 48px;
@@ -1826,33 +1876,47 @@ body {
 .grapes-editor-shell .gjs-trt-traits { background: transparent; }
 .grapes-editor-shell .gjs-blocks-c { padding: 8px; }
 .grapes-editor-shell .gjs-block { width: calc(50% - 8px); min-height: 72px; }
-.gjs-blocks-dialog .gjs-blocks-c {
+.gjs-insert-panel .gjs-blocks-c {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-  padding: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
 }
-.gjs-blocks-dialog .gjs-block {
+.gjs-insert-panel .gjs-block {
   width: auto;
-  min-height: 112px;
+  min-height: 96px;
   margin: 0;
   display: grid;
   align-content: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid #31333a;
   border-radius: 8px;
   box-shadow: none;
 }
-.gjs-blocks-dialog .gjs-block:hover {
+.gjs-insert-panel .gjs-block:hover {
   color: white;
   border-color: var(--ve-purple);
   box-shadow: inset 0 0 0 1px var(--ve-purple);
 }
-.gjs-blocks-dialog .gjs-block-media svg { width: 42px; height: 42px; }
-@media(max-width:620px) {
-  .gjs-blocks-backdrop { padding: 0; }
-  .gjs-blocks-dialog { width: 100vw; height: 100vh; border: 0; border-radius: 0; }
-  .gjs-blocks-dialog .gjs-blocks-c { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gjs-insert-panel .gjs-block-media svg { width: 36px; height: 36px; }
+.gjs-insert-panel .gjs-block-label { line-height: 1.25; }
+.gjs-insert-panel .gjs-block-category .gjs-title {
+  min-height: 38px;
+  padding: 0 11px;
+  border-bottom-color: var(--ve-border);
+  font-weight: 750;
+}
+@media(max-width:760px) {
+  .gjs-workspace-grid.blocks-open { grid-template-columns: 210px minmax(0, 1fr) 270px; }
+  .gjs-left-panel.is-inserting {
+    position: fixed;
+    z-index: 70;
+    top: 48px;
+    bottom: 0;
+    left: 0;
+    width: min(320px, 100vw);
+    box-shadow: 14px 0 36px rgba(0, 0, 0, .48);
+  }
 }
 .grapes-editor-shell .gjs-sm-sector-title,
 .grapes-editor-shell .gjs-layer-title { border-color: var(--ve-border); }
