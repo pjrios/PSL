@@ -898,6 +898,60 @@ describe('navigation runtime', () => {
     document.body.innerHTML = ''
   })
 
+  it('uses the destination configured on the auth component after sign in', async () => {
+    document.body.innerHTML = `<form data-psl-auth-action="login" data-psl-auth-destination="dashboard">
+      <input name="email" value="student@example.com">
+      <input name="password" value="class-password">
+      <button type="submit">Entrar</button>
+      <p data-psl-auth-status></p>
+    </form>`
+    const values = new Map<string, string>([
+      ['psl-auth:guards.supabase.co:return-page', 'practice'],
+    ])
+    const storage = {
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+      removeItem: vi.fn((key: string) => values.delete(key)),
+    }
+    window.__PSL_NAVIGATION__ = {
+      currentPage: 'access',
+      pageUrls: { access: 'access.html', dashboard: 'dashboard.html', practice: 'practice.html' },
+      transport: 'message',
+      authentication: {
+        provider: 'supabase',
+        projectUrl: 'https://guards.supabase.co',
+        publishableKey: 'sb_publishable_test_key',
+        loginPage: 'access',
+        afterLoginPage: 'practice',
+        afterLogoutPage: 'access',
+      },
+      connections: [],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      access_token: 'new-access-token',
+      refresh_token: 'new-refresh-token',
+      expires_in: 3600,
+    }), { status: 200 }))
+    const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => undefined)
+    const runtimeWindow = Object.create(window) as Window
+    Object.defineProperty(runtimeWindow, 'localStorage', { value: storage })
+    Object.defineProperty(runtimeWindow, 'fetch', { value: fetchMock })
+    const dispose = installNavigationRuntime(runtimeWindow, document)
+
+    document.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+
+    await vi.waitFor(() => expect(postMessage).toHaveBeenCalledWith({
+      action: 'navigate',
+      source: 'psl-navigation-runtime',
+      targetPage: 'dashboard',
+    }, '*'))
+
+    dispose()
+    postMessage.mockRestore()
+    delete window.__PSL_NAVIGATION__
+    document.body.innerHTML = ''
+  })
+
   it('switches between login and signup panels without relying on element ids', () => {
     document.body.innerHTML = `<section data-psl-auth-visible="signed-out">
       <button data-psl-auth-tab="login" aria-selected="true">Login</button>

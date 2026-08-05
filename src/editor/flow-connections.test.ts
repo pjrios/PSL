@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   FLOW_ACTION_ATTRIBUTE,
   FLOW_TARGET_ATTRIBUTE,
+  INTERACTION_ANIMATION_ATTRIBUTE,
   installScreenFlowNavigation,
+  readInteractionAnimation,
   readScreenFlowConnection,
   screenFlowAttributes,
 } from './flow-connections'
@@ -24,6 +26,12 @@ describe('screen flow connections', () => {
   it('ignores incomplete connection attributes', () => {
     expect(readScreenFlowConnection({ [FLOW_ACTION_ATTRIBUTE]: 'navigate' })).toBeNull()
     expect(readScreenFlowConnection({ [FLOW_TARGET_ATTRIBUTE]: 'catalog' })).toBeNull()
+  })
+
+  it('reads supported interaction animations and safely defaults unknown values', () => {
+    expect(readInteractionAnimation({ [INTERACTION_ANIMATION_ATTRIBUTE]: 'lift' })).toBe('lift')
+    expect(readInteractionAnimation({ [INTERACTION_ANIMATION_ATTRIBUTE]: 'spin-forever' })).toBe('none')
+    expect(readInteractionAnimation({})).toBe('none')
   })
 
   it('navigates from a connected element only while preview is enabled', async () => {

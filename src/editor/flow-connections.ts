@@ -1,6 +1,17 @@
 export const FLOW_ACTION_ATTRIBUTE = 'data-psl-flow-action'
 export const FLOW_TARGET_ATTRIBUTE = 'data-psl-flow-target'
+export const INTERACTION_ANIMATION_ATTRIBUTE = 'data-psl-interaction'
 const FLOW_PREVIEW_MESSAGE_SOURCE = 'psl-screen-flow-preview'
+
+export const INTERACTION_ANIMATIONS = ['none', 'lift', 'pulse', 'glow'] as const
+export type InteractionAnimation = typeof INTERACTION_ANIMATIONS[number]
+
+export function readInteractionAnimation(attributes: Record<string, unknown>): InteractionAnimation {
+  const animation = attributes[INTERACTION_ANIMATION_ATTRIBUTE]
+  return INTERACTION_ANIMATIONS.includes(animation as InteractionAnimation)
+    ? animation as InteractionAnimation
+    : 'none'
+}
 
 export interface ScreenFlowConnection {
   action: 'navigate'

@@ -460,6 +460,112 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .gjs-canvas-viewport-controls .gjs-canvas-fit-button { min-width: 58px; }
+.gjs-resize-dimensions {
+  position: absolute;
+  z-index: 12;
+  left: 50%;
+  bottom: 62px;
+  min-width: 104px;
+  padding: 5px 9px;
+  color: white;
+  background: color-mix(in srgb, var(--ve-purple) 88%, #111214);
+  border: 1px solid color-mix(in srgb, var(--ve-purple) 70%, white);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .32);
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: var(--ve-text-xs);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.grapes-editor .gjs-resizer-h {
+  width: 11px;
+  height: 11px;
+  background: white;
+  border: 2px solid var(--ve-purple);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+}
+.grapes-editor .gjs-rte-toolbar-ui {
+  width: 560px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  border-color: #303238;
+  border-radius: 9px;
+  box-shadow: 0 7px 22px rgba(0, 0, 0, .38);
+}
+.grapes-editor .gjs-rte-actionbar {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+}
+.grapes-editor .gjs-rte-row-break {
+  display: none;
+}
+.grapes-editor .gjs-rte-action[data-rte-control] {
+  width: auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0;
+  background: #191b1f;
+}
+.grapes-editor .gjs-rte-action[data-rte-control="font-family"] { grid-column: span 7; }
+.grapes-editor .gjs-rte-action[data-rte-control="font-size"] { grid-column: span 4; }
+.grapes-editor .gjs-rte-action[data-rte-control="line-height"] { grid-column: span 5; }
+.grapes-editor .gjs-rte-action[data-rte-control="color"] { grid-column: span 4; }
+.grapes-editor .gjs-rte-select {
+  width: 100%;
+  height: 36px;
+  padding: 0 22px 0 8px;
+  color: #f4f4f5;
+  background: #191b1f;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  cursor: pointer;
+  font: 700 12px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.grapes-editor .gjs-rte-select:hover,
+.grapes-editor .gjs-rte-select:focus { background: #292c33; }
+.grapes-editor .gjs-rte-color-label {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.grapes-editor .gjs-rte-color-label > span { padding-bottom: 5px; color: #f4f4f5; font-size: 15px; font-weight: 800; }
+.grapes-editor .gjs-rte-color {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 5px;
+  width: 22px;
+  height: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.grapes-editor .gjs-rte-color::-webkit-color-swatch-wrapper { padding: 0; }
+.grapes-editor .gjs-rte-color::-webkit-color-swatch { border: 0; border-radius: 2px; }
+.grapes-editor .gjs-rte-action:not([data-rte-control]) {
+  box-sizing: border-box;
+  width: auto;
+  min-width: 28px;
+  height: 34px;
+  grid-column: span 2;
+  padding: 6px;
+}
+.grapes-editor .gjs-rte-action[data-rte-alignment] svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
 .grapes-editor .gjs-cv-canvas.gjs-is__grab { cursor: grab; }
 .grapes-editor .gjs-cv-canvas.gjs-is__grabbing { cursor: grabbing; }
 .grapes-editor .gjs-pn-views,
@@ -1339,6 +1445,67 @@ body {
 }
 .gjs-flow-connected > span { font-weight: 900; }
 .gjs-flow-notice { color: #c8c2f8; font-size: var(--ve-text-xs); }
+
+.gjs-auth-settings-backdrop {
+  position: fixed;
+  z-index: 10070;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 8, 10, .72);
+  backdrop-filter: blur(4px);
+}
+.gjs-auth-settings-dialog {
+  width: min(440px, 100%);
+  overflow: hidden;
+  color: var(--ve-white);
+  background: #181a1f;
+  border: 1px solid #383b44;
+  border-radius: 10px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .52);
+}
+.gjs-auth-settings-dialog > header {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #25203c, #17191f);
+  border-bottom: 1px solid #373a43;
+}
+.gjs-auth-settings-dialog > header div { display: grid; gap: 3px; }
+.gjs-auth-settings-dialog > header span { color: #a99aff; font-size: 10px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.gjs-auth-settings-dialog > header strong { font-size: 17px; }
+.gjs-auth-settings-dialog > header button {
+  width: 32px;
+  height: 32px;
+  color: var(--ve-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 22px;
+}
+.gjs-auth-settings-dialog > header button:hover { color: white; background: #30323a; }
+.gjs-auth-settings-body { display: grid; gap: 15px; padding: 18px; }
+.gjs-auth-settings-body p,
+.gjs-auth-settings-body small { margin: 0; color: var(--ve-muted); line-height: 1.5; }
+.gjs-auth-settings-body label { display: grid; gap: 7px; font-size: var(--ve-text-xs); font-weight: 750; }
+.gjs-auth-settings-body select {
+  min-height: 40px;
+  padding: 0 10px;
+  color: white;
+  background: var(--ve-black);
+  border: 1px solid var(--ve-border);
+  border-radius: 6px;
+  font: inherit;
+}
+.gjs-auth-settings-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #30323a; }
+.gjs-auth-settings-dialog > footer button { min-height: 36px; padding: 0 14px; border-radius: 6px; cursor: pointer; font-weight: 750; }
+.gjs-auth-settings-dialog > footer .secondary { color: white; background: #282a31; border: 1px solid #41444d; }
+.gjs-auth-settings-dialog > footer .primary { color: white; background: var(--ve-purple); border: 1px solid var(--ve-purple); }
 
 .gjs-page-modal-backdrop {
   position: fixed;

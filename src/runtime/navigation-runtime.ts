@@ -6,6 +6,7 @@ import type {
   NavigationContextValue,
   ProjectAuthentication,
 } from '../core/project'
+import { AUTH_DESTINATION_ATTRIBUTE } from '../core/auth-components'
 
 export type { NavigationContext } from '../core/project'
 
@@ -1053,8 +1054,9 @@ export function installNavigationRuntime(
               return
             }
             saveSession(session)
-            const destination = storedReturnPage()
-              ?? runtimeConfig.authentication?.afterLoginPage
+            const destination = form.getAttribute(AUTH_DESTINATION_ATTRIBUTE)?.trim()
+              || storedReturnPage()
+              || runtimeConfig.authentication?.afterLoginPage
             saveReturnPage()
             if (destination) navigateToPage(destination, true)
             else runtimeWindow.location.reload()
@@ -1078,7 +1080,8 @@ export function installNavigationRuntime(
           }
           saveSession()
           saveReturnPage()
-          const destination = runtimeConfig.authentication?.afterLogoutPage
+          const destination = button.getAttribute(AUTH_DESTINATION_ATTRIBUTE)?.trim()
+            || runtimeConfig.authentication?.afterLogoutPage
           if (destination) navigateToPage(destination, true)
           else runtimeWindow.location.reload()
         }

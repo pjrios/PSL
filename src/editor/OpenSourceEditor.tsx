@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import grapesjs from 'grapesjs'
-import type { Block, Button, Component, Device, Editor, ProjectData } from 'grapesjs'
+import type {
+  Block,
+  Button,
+  Component,
+  Device,
+  Editor,
+  ProjectData,
+  ResizerOptions,
+  RichTextEditorAction,
+} from 'grapesjs'
 import blocksBasic from 'grapesjs-blocks-basic'
 import pluginForms from 'grapesjs-plugin-forms'
 import navbar from 'grapesjs-navbar'
@@ -12,8 +21,17 @@ import 'grapesjs/dist/css/grapes.min.css'
 import { loadEditorProjectData, saveEditorProjectData } from '../editor-platform'
 import type { EditorProjectData } from '../editor-platform'
 import {
+  AUTH_ACTION_ATTRIBUTE,
+  AUTH_DESTINATION_ATTRIBUTE,
+  readAuthComponentSettings,
+} from '../core/auth-components'
+import type { AuthComponentSettings } from '../core/auth-components'
+import {
   FLOW_ACTION_ATTRIBUTE,
   FLOW_TARGET_ATTRIBUTE,
+  INTERACTION_ANIMATION_ATTRIBUTE,
+  type InteractionAnimation,
+  readInteractionAnimation,
   readScreenFlowConnection,
   screenFlowAttributes,
 } from './flow-connections'
@@ -78,6 +96,7 @@ import {
   MOTION_VIEW_REFERENCE_BLOCK_ID,
 } from './motion-analysis'
 import { MotionPanel, MotionSettingsDialog } from './MotionPanel'
+import { AuthSettingsDialog } from './AuthSettingsDialog'
 
 function normalizedGrapesProjectData(value: Record<string, unknown>): ProjectData {
   return {
@@ -96,6 +115,7 @@ type ElementSummary = {
   bindingScope?: 'context' | 'first'
   dataSourceTableId?: string
   inheritedRepeaterTableId?: string
+  interactionAnimation: InteractionAnimation
   isRepeater: boolean
   label: string
   tag: string
@@ -124,6 +144,285 @@ const SUPABASE_BLOCK_ICONS = {
   email: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="m7 14 17 13 17-13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>',
   data: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="8" width="38" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="M5 18h38M16 18v22M29 18v22" fill="none" stroke="currentColor" stroke-width="3"/></svg>',
 } as const
+
+const NON_RESIZABLE_TAGS = new Set(['body', 'html', 'head', 'script', 'style', 'meta', 'link'])
+const WIDTH_ONLY_RESIZE_TAGS = new Set([
+  'a', 'blockquote', 'button', 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'label', 'li', 'p', 'small', 'span', 'strong',
+])
+const INLINE_FONT_FAMILIES = [
+  ['inherit', 'Predeterminada'],
+  ['Arial, sans-serif', 'Arial'],
+  ['Georgia, serif', 'Georgia'],
+  ['"Times New Roman", serif', 'Times New Roman'],
+  ['Verdana, sans-serif', 'Verdana'],
+  ['"Trebuchet MS", sans-serif', 'Trebuchet MS'],
+  ['"Courier New", monospace', 'Courier New'],
+  ['system-ui, sans-serif', 'Sistema'],
+] as const
+const INLINE_FONT_SIZES = [
+  '12', '14', '16', '18', '20', '24', '32', '40', '48', '56', '64', '72', '96', '128',
+] as const
+const INLINE_LINE_HEIGHTS = ['0.9', '1', '1.15', '1.3', '1.5', '1.75', '2'] as const
+const INTERACTION_STYLES = `
+  [data-psl-interaction] {
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    transform-origin: center;
+  }
+  [data-psl-interaction="lift"]:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .22);
+  }
+  [data-psl-interaction="pulse"]:hover { animation: psl-interaction-pulse .48s ease both; }
+  [data-psl-interaction="pulse"]:active { transform: scale(.96); }
+  [data-psl-interaction="glow"]:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 0 0 4px rgba(124, 92, 255, .24), 0 8px 24px rgba(0, 0, 0, .18);
+  }
+  @keyframes psl-interaction-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.055); }
+  }
+`
+
+export function directResizeOptions(tagName: string, componentType = ''): ResizerOptions | false {
+  const tag = tagName.toLowerCase()
+  const type = componentType.toLowerCase()
+  if (type === 'wrapper' || NON_RESIZABLE_TAGS.has(tag)) return false
+
+  const widthOnly = type === 'text' || WIDTH_ONLY_RESIZE_TAGS.has(tag)
+  return {
+    minDim: 10,
+    ratioDefault: false,
+    updateOnMove: true,
+    ...(widthOnly ? {
+      bl: false,
+      br: false,
+      keepAutoHeight: true,
+      tc: false,
+      tl: false,
+      tr: false,
+      bc: false,
+    } : {}),
+  }
+}
+
+type InlineStyleRte = {
+  doc: Document
+  el: HTMLElement
+  selection: () => Selection | null
+}
+
+export function applyInlineTextStyle(
+  rte: InlineStyleRte,
+  property: 'color' | 'font-family' | 'font-size' | 'line-height',
+  value: string,
+) {
+  const selection = rte.selection()
+  if (!selection?.rangeCount || selection.isCollapsed || !value) return false
+
+  const range = selection.getRangeAt(0)
+  const RangeConstructor = rte.doc.defaultView?.Range
+  let ancestor: HTMLElement | null = range.startContainer instanceof rte.doc.defaultView!.HTMLElement
+    ? range.startContainer
+    : range.startContainer.parentElement
+  while (ancestor && ancestor !== rte.el) {
+    const ancestorRange = rte.doc.createRange()
+    ancestorRange.selectNodeContents(ancestor)
+    const coversAncestor = RangeConstructor
+      ? range.compareBoundaryPoints(RangeConstructor.START_TO_START, ancestorRange) <= 0
+        && range.compareBoundaryPoints(RangeConstructor.END_TO_END, ancestorRange) >= 0
+      : false
+    if (coversAncestor) {
+      ancestor.style.removeProperty(property)
+      if (!ancestor.getAttribute('style')) ancestor.removeAttribute('style')
+    }
+    ancestor = ancestor.parentElement
+  }
+
+  const wrapper = rte.doc.createElement('span')
+  wrapper.style.setProperty(property, value)
+  try {
+    range.surroundContents(wrapper)
+  } catch {
+    wrapper.append(range.extractContents())
+    range.insertNode(wrapper)
+  }
+
+  wrapper.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
+    element.style.removeProperty(property)
+    if (!element.getAttribute('style')) element.removeAttribute('style')
+  })
+
+  range.selectNodeContents(wrapper)
+  selection.removeAllRanges()
+  selection.addRange(range)
+  const EventConstructor = rte.doc.defaultView?.Event ?? Event
+  rte.el.dispatchEvent(new EventConstructor('input', { bubbles: true }))
+  return true
+}
+
+export function applyComponentLineHeight(component: Component, rte: InlineStyleRte, value: string) {
+  if (!value) return false
+  component.addStyle({ 'line-height': value })
+  component.find('*').forEach((descendant) => descendant.removeStyle('line-height'))
+  rte.el.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
+    element.style.removeProperty('line-height')
+    if (!element.getAttribute('style')) element.removeAttribute('style')
+  })
+  const EventConstructor = rte.doc.defaultView?.Event ?? Event
+  rte.el.dispatchEvent(new EventConstructor('input', { bubbles: true }))
+  return true
+}
+
+function richTextSelect(action: RichTextEditorAction) {
+  return action.btn?.querySelector<HTMLSelectElement>('select') ?? null
+}
+
+function selectedRichTextStyle(
+  rte: InlineStyleRte,
+  property: 'color' | 'font-family' | 'font-size' | 'line-height',
+) {
+  const node = rte.selection()?.anchorNode
+  const element = node instanceof rte.doc.defaultView!.Element ? node : node?.parentElement
+  return element && rte.doc.defaultView ? rte.doc.defaultView.getComputedStyle(element).getPropertyValue(property) : ''
+}
+
+export function cssColorToHex(value: string) {
+  if (/^#[\da-f]{6}$/i.test(value)) return value.toLowerCase()
+  const channels = value.match(/[\d.]+/g)?.slice(0, 3).map(Number)
+  return channels?.length === 3
+    ? `#${channels.map((channel) => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, '0')).join('')}`
+    : '#000000'
+}
+
+function alignmentIcon(alignment: 'left' | 'center' | 'right' | 'justify') {
+  const widths = alignment === 'left'
+    ? [18, 13, 18, 10]
+    : alignment === 'center'
+      ? [18, 12, 18, 14]
+      : alignment === 'right'
+        ? [18, 13, 18, 10]
+        : [18, 18, 18, 18]
+  const positions = alignment === 'center'
+    ? widths.map((width) => (20 - width) / 2)
+    : alignment === 'right'
+      ? widths.map((width) => 20 - width)
+      : widths.map(() => 1)
+  return `<svg aria-hidden="true" viewBox="0 0 22 22">${widths.map((width, index) =>
+    `<path d="M${positions[index]} ${4 + index * 5}h${width}"/>`).join('')}</svg>`
+}
+
+function installInlineTypographyControls(editor: Editor) {
+  const fontOptions = INLINE_FONT_FAMILIES.map(([value, label]) =>
+    `<option value="${value.replaceAll('"', '&quot;')}">${label}</option>`).join('')
+  editor.RichTextEditor.add('inline-font-family', {
+    attributes: { 'data-rte-control': 'font-family', title: 'Fuente' },
+    event: 'change',
+    icon: `<select aria-label="Fuente" class="gjs-rte-select gjs-rte-font-family"><option value="">Fuente</option>${fontOptions}</select>`,
+    result: (rte, action) => {
+      const value = richTextSelect(action)?.value ?? ''
+      if (value) applyInlineTextStyle(rte, 'font-family', value)
+    },
+    update: (rte, action) => {
+      const select = richTextSelect(action)
+      if (!select) return 0
+      const current = selectedRichTextStyle(rte, 'font-family').replaceAll('"', '').toLowerCase()
+      const match = INLINE_FONT_FAMILIES.find(([value]) => {
+        if (value === 'inherit') return false
+        return current.startsWith(value.replaceAll('"', '').toLowerCase().split(',')[0])
+      })
+      select.value = match?.[0] ?? ''
+      return 0
+    },
+  })
+  editor.RichTextEditor.add('inline-font-size', {
+    attributes: { 'data-rte-control': 'font-size', title: 'Tamaño de fuente' },
+    event: 'change',
+    icon: `<select aria-label="Tamaño de fuente" class="gjs-rte-select gjs-rte-font-size"><option value="">Tamaño</option><option value="inherit">Predeterminado</option>${INLINE_FONT_SIZES.map((size) => `<option value="${size}px">${size}</option>`).join('')}</select>`,
+    result: (rte, action) => {
+      const value = richTextSelect(action)?.value ?? ''
+      if (value) applyInlineTextStyle(rte, 'font-size', value)
+    },
+    update: (rte, action) => {
+      const select = richTextSelect(action)
+      if (!select) return 0
+      const current = Math.round(Number.parseFloat(selectedRichTextStyle(rte, 'font-size')))
+      select.value = INLINE_FONT_SIZES.includes(String(current) as typeof INLINE_FONT_SIZES[number]) ? `${current}px` : ''
+      return 0
+    },
+  })
+  editor.RichTextEditor.add('inline-line-height', {
+    attributes: { 'data-rte-control': 'line-height', title: 'Interlineado' },
+    event: 'change',
+    icon: `<select aria-label="Interlineado" class="gjs-rte-select gjs-rte-line-height"><option value="">Líneas</option><option value="normal">Predeterminado</option>${INLINE_LINE_HEIGHTS.map((height) => `<option value="${height}">${height}×</option>`).join('')}</select>`,
+    result: (rte, action) => {
+      const value = richTextSelect(action)?.value ?? ''
+      const component = editor.getSelected()
+      if (component && value) applyComponentLineHeight(component, rte, value)
+    },
+    update: (rte, action) => {
+      const select = richTextSelect(action)
+      if (!select) return 0
+      const currentLineHeight = selectedRichTextStyle(rte, 'line-height')
+      if (currentLineHeight === 'normal') {
+        select.value = 'normal'
+        return 0
+      }
+      const lineHeight = Number.parseFloat(currentLineHeight)
+      const fontSize = Number.parseFloat(selectedRichTextStyle(rte, 'font-size'))
+      const ratio = lineHeight / fontSize
+      const match = INLINE_LINE_HEIGHTS.find((height) => Math.abs(Number(height) - ratio) < 0.04)
+      select.value = match ?? ''
+      return 0
+    },
+  })
+  editor.RichTextEditor.add('inline-text-color', {
+    attributes: { 'data-rte-control': 'color', title: 'Color del texto' },
+    event: 'change',
+    icon: '<label class="gjs-rte-color-label"><span>A</span><input aria-label="Color del texto" class="gjs-rte-color" type="color" value="#000000"></label>',
+    result: (rte, action) => {
+      const value = action.btn?.querySelector<HTMLInputElement>('input[type="color"]')?.value ?? ''
+      if (value) applyInlineTextStyle(rte, 'color', value)
+    },
+    update: (rte, action) => {
+      const input = action.btn?.querySelector<HTMLInputElement>('input[type="color"]')
+      if (input) input.value = cssColorToHex(selectedRichTextStyle(rte, 'color'))
+      return 0
+    },
+  })
+
+  const alignments = [
+    ['left', 'Alinear a la izquierda', 'justifyLeft'],
+    ['center', 'Centrar texto', 'justifyCenter'],
+    ['right', 'Alinear a la derecha', 'justifyRight'],
+    ['justify', 'Justificar texto', 'justifyFull'],
+  ] as const
+  alignments.forEach(([alignment, title, command]) => {
+    editor.RichTextEditor.add(`inline-align-${alignment}`, {
+      attributes: { 'data-rte-alignment': alignment, title },
+      icon: alignmentIcon(alignment),
+      result: (rte) => rte.exec(command),
+      state: (_rte, document) => document.queryCommandState(command) ? 1 : 0,
+    })
+  })
+
+  const familyButton = editor.RichTextEditor.get('inline-font-family')?.btn
+  const sizeButton = editor.RichTextEditor.get('inline-font-size')?.btn
+  const lineHeightButton = editor.RichTextEditor.get('inline-line-height')?.btn
+  const colorButton = editor.RichTextEditor.get('inline-text-color')?.btn
+  const actionbar = familyButton?.parentElement
+  if (actionbar && familyButton && sizeButton && lineHeightButton && colorButton) {
+    const rowBreak = document.createElement('span')
+    rowBreak.className = 'gjs-rte-row-break'
+    rowBreak.setAttribute('aria-hidden', 'true')
+    actionbar.prepend(rowBreak)
+    actionbar.prepend(colorButton)
+    actionbar.prepend(lineHeightButton)
+    actionbar.prepend(sizeButton)
+    actionbar.prepend(familyButton)
+  }
+}
 
 function loadGuestProjectData(): EditorProjectData {
   const saved = JSON.parse(localStorage.getItem(GUEST_PROJECT_STORAGE_KEY) ?? 'null') as EditorProjectData | null
@@ -178,6 +477,7 @@ function summarizeComponent(component?: Component | null): ElementSummary | null
     dataSourceTableId: typeof attributes[DATA_SOURCE_ATTRIBUTE] === 'string'
       ? attributes[DATA_SOURCE_ATTRIBUTE] as string
       : undefined,
+    interactionAnimation: readInteractionAnimation(attributes),
     isRepeater: typeof attributes[DATA_REPEATER_ATTRIBUTE] === 'string',
     inheritedRepeaterTableId,
     repeaterTableId: typeof attributes[DATA_REPEATER_ATTRIBUTE] === 'string'
@@ -472,7 +772,9 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
   const canvasViewsRef = useRef(new Map<string, CanvasViewState>())
   const currentCanvasDeviceRef = useRef('desktop')
   const editingDataComponentRef = useRef<Component | null>(null)
+  const authSettingsComponentRef = useRef<Component | null>(null)
   const panToolLockedRef = useRef(false)
+  const resizeNoticeTimerRef = useRef<number | undefined>(undefined)
   const initialSupabaseConfigRef = useRef(EMPTY_SUPABASE_CONFIG)
   const supabaseConfigRef = useRef(initialSupabaseConfigRef.current)
   const [error, setError] = useState<string | null>(null)
@@ -495,12 +797,14 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
   const [selectedMotionComponent, setSelectedMotionComponent] = useState<Component | null>(null)
   const [motionNotice, setMotionNotice] = useState('')
   const [motionDialogOpen, setMotionDialogOpen] = useState(false)
+  const [authSettings, setAuthSettings] = useState<AuthComponentSettings | null>(null)
   const [flowTargetPageId, setFlowTargetPageId] = useState('')
   const [flowNotice, setFlowNotice] = useState('')
   const [previewActive, setPreviewActive] = useState(false)
   const [canvasZoom, setCanvasZoom] = useState(100)
   const [canvasZoomMode, setCanvasZoomMode] = useState<CanvasZoomMode>('fit')
   const [panToolActive, setPanToolActive] = useState(false)
+  const [resizeDimensions, setResizeDimensions] = useState('')
   const [previewSession, setPreviewSession] = useState<EditorPreviewSession | null>(null)
   const [previewViewport, setPreviewViewport] = useState<EditorPreviewViewport>({
     label: 'Escritorio',
@@ -523,6 +827,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
     let canvasResizeObserver: ResizeObserver | undefined
     const canvasDoubleClickCleanups: Array<() => void> = []
     const canvasDoubleClickDocuments = new WeakSet<Document>()
+    const authDoubleClickElements = new WeakSet<HTMLElement>()
     try {
       const editorAccountStoragePlugin = (editor: Editor) => {
         editor.Storage.add('editor-account', {
@@ -668,6 +973,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
 
       editorRef.current = editor
       editor.Pages.select(BLANK_PAGE.id)
+      installInlineTypographyControls(editor)
       editor.BlockManager.get('tabs')?.set('category', 'Extra')
 
       const authFormStyle = 'display:grid;gap:12px;max-width:420px;padding:24px;background:#fff;border:1px solid #d8e3e1;border-radius:12px'
@@ -794,12 +1100,44 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
         if (!motionComponent) setMotionNotice('')
         setFlowTargetPageId(summary?.targetPageId ?? '')
         setFlowNotice('')
-        setRightPanel((current) => motionComponent ? 'motion' : current === 'motion' ? 'properties' : current)
+        setRightPanel((current) => motionComponent
+          ? 'motion'
+          : summary && ['BUTTON', 'A'].includes(summary.tag)
+            ? 'flow'
+            : current === 'motion' ? 'properties' : current)
       }
 
       const installDataComponentDoubleClick = () => {
         const canvasDocument = editor.Canvas.getDocument()
-        if (!canvasDocument || canvasDoubleClickDocuments.has(canvasDocument)) return
+        if (!canvasDocument) return
+        const openAuthComponentOptions = (event: MouseEvent) => {
+          const rootElement = event.currentTarget as HTMLElement | null
+          if (!rootElement) return
+          const authAction = rootElement.getAttribute(AUTH_ACTION_ATTRIBUTE)
+          const candidates = editor.getWrapper()?.find(`[${AUTH_ACTION_ATTRIBUTE}]`) ?? []
+          const component = candidates.find((candidate) => candidate.getEl() === rootElement
+            || Boolean(rootElement.id && (
+              candidate.getId() === rootElement.id
+              || candidate.getAttributes().id === rootElement.id
+            ))) ?? candidates.find((candidate) => candidate.getAttributes()[AUTH_ACTION_ATTRIBUTE] === authAction)
+          const settings = component ? readAuthComponentSettings(component.getAttributes()) : null
+          if (!component || !settings) return
+          event.preventDefault()
+          event.stopPropagation()
+          authSettingsComponentRef.current = component
+          editor.select(component)
+          syncSelectedElement(component)
+          setAuthSettings(settings)
+        }
+        canvasDocument.querySelectorAll<HTMLElement>(`[${AUTH_ACTION_ATTRIBUTE}]`).forEach((element) => {
+          if (authDoubleClickElements.has(element)) return
+          authDoubleClickElements.add(element)
+          element.setAttribute('data-psl-auth-configurable', 'true')
+          if (!element.title) element.title = 'Doble clic para configurar Supabase Auth'
+          element.addEventListener('dblclick', openAuthComponentOptions, true)
+          canvasDoubleClickCleanups.push(() => element.removeEventListener('dblclick', openAuthComponentOptions, true))
+        })
+        if (canvasDoubleClickDocuments.has(canvasDocument)) return
         canvasDoubleClickDocuments.add(canvasDocument)
         const openDataComponentOptions = (event: MouseEvent) => {
           const target = event.target as Element | null
@@ -935,6 +1273,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
         syncPages()
         syncPreviewViewport()
         editor.Css.addRules(dataComponentStyles)
+        editor.Css.addRules(INTERACTION_STYLES)
         installEditorViewport()
         stabilizeEditorCanvas()
         installDataComponentDoubleClick()
@@ -980,7 +1319,10 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
       })
       editor.on('page:add', syncPages)
       editor.on('page:remove', syncPages)
-      editor.on('page:select', syncPages)
+      editor.on('page:select', () => {
+        syncPages()
+        requestAnimationFrame(installDataComponentDoubleClick)
+      })
       editor.on('page:update', syncPages)
       editor.on('device:select', (device: Device | null | undefined, previousDevice: Device | null | undefined) => {
         syncPreviewViewport(device, previousDevice)
@@ -1002,6 +1344,33 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
       })
       editor.on('component:deselected', () => {
         syncSelectedElement(editor.getSelected())
+      })
+      editor.on('component:add', () => requestAnimationFrame(installDataComponentDoubleClick))
+      editor.on('component:resize:init', (options: {
+        component: Component
+        resizable: boolean | ResizerOptions
+      }) => {
+        const component = options.component
+        options.resizable = directResizeOptions(
+          String(component.get('tagName') ?? ''),
+          String(component.get('type') ?? ''),
+        )
+      })
+      const showResizeDimensions = ({ el }: { el: HTMLElement }) => {
+        window.clearTimeout(resizeNoticeTimerRef.current)
+        const rect = el.getBoundingClientRect()
+        setResizeDimensions(`${Math.round(rect.width)} × ${Math.round(rect.height)} px`)
+      }
+      editor.on('component:resize:start', (event: { component: Component; el: HTMLElement }) => {
+        if (event.el.ownerDocument.defaultView?.getComputedStyle(event.el).display === 'inline') {
+          event.component.addStyle({ display: 'inline-block' })
+        }
+        showResizeDimensions(event)
+      })
+      editor.on('component:resize:move', showResizeDimensions)
+      editor.on('component:resize:end', (event: { el: HTMLElement }) => {
+        showResizeDimensions(event)
+        resizeNoticeTimerRef.current = window.setTimeout(() => setResizeDimensions(''), 900)
       })
       editor.on('block:click', () => {
         setBlocksOpen(false)
@@ -1066,6 +1435,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
     }
 
     return () => {
+      window.clearTimeout(resizeNoticeTimerRef.current)
       canvasResizeObserver?.disconnect()
       canvasDoubleClickCleanups.forEach((cleanup) => cleanup())
       ;(editorRef.current as (Editor & { __removePanShortcuts?: () => void }) | null)?.__removePanShortcuts?.()
@@ -1174,14 +1544,19 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
     const inboundConnections = editor.Pages.getAll().flatMap((candidate) => (
       candidate.getMainComponent()?.find(`[${FLOW_TARGET_ATTRIBUTE}="${pageId}"]`) ?? []
     ))
-    const connectionWarning = inboundConnections.length
-      ? `\n\nTambién se eliminarán ${inboundConnections.length} conexiones de Flujo que apuntan a esta página.`
+    const inboundAuthDestinations = editor.Pages.getAll().flatMap((candidate) => (
+      candidate.getMainComponent()?.find(`[${AUTH_DESTINATION_ATTRIBUTE}="${pageId}"]`) ?? []
+    ))
+    const linkedCount = inboundConnections.length + inboundAuthDestinations.length
+    const connectionWarning = linkedCount
+      ? `\n\nTambién se eliminarán ${linkedCount} destinos configurados que apuntan a esta página.`
       : ''
     if (!window.confirm(`¿Eliminar “${page.getName() || 'Sin título'}”? Esta acción no se puede deshacer.${connectionWarning}`)) return
 
     inboundConnections.forEach((component) => {
       component.removeAttributes([FLOW_ACTION_ATTRIBUTE, FLOW_TARGET_ATTRIBUTE])
     })
+    inboundAuthDestinations.forEach((component) => component.removeAttributes(AUTH_DESTINATION_ATTRIBUTE))
     const fallback = editor.Pages.getAll().find((candidate) => candidate.getId() !== pageId)
     if (editor.Pages.getSelected()?.getId() === pageId && fallback) editor.Pages.select(fallback)
     editor.Pages.remove(page)
@@ -1241,6 +1616,34 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
     setFlowNotice('Conexión eliminada.')
     void editor.store().catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : 'No se pudo guardar el cambio.')
+    })
+  }
+
+  function saveInteractionAnimation(animation: InteractionAnimation) {
+    const editor = editorRef.current
+    const component = editor?.getSelected()
+    if (!editor || !component) return
+
+    if (animation === 'none') component.removeAttributes(INTERACTION_ANIMATION_ATTRIBUTE)
+    else component.addAttributes({ [INTERACTION_ANIMATION_ATTRIBUTE]: animation })
+    setSelectedElement(summarizeComponent(component))
+    setFlowNotice(animation === 'none' ? 'Animación eliminada.' : 'Animación guardada.')
+    void editor.store().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar la animación.')
+    })
+  }
+
+  function saveAuthSettings(destinationPageId: string) {
+    const editor = editorRef.current
+    const component = authSettingsComponentRef.current
+    if (!editor || !component) return
+
+    if (destinationPageId) component.addAttributes({ [AUTH_DESTINATION_ATTRIBUTE]: destinationPageId })
+    else component.removeAttributes(AUTH_DESTINATION_ATTRIBUTE)
+    setAuthSettings(null)
+    authSettingsComponentRef.current = null
+    void editor.store().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar la configuración de acceso.')
     })
   }
 
@@ -1563,6 +1966,8 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
         <section className="gjs-canvas-column" ref={canvasColumnRef}>
           <div className="grapes-editor" ref={canvasRef} />
           {!previewActive && (
+            <>
+            {resizeDimensions && <output aria-live="polite" className="gjs-resize-dimensions">{resizeDimensions}</output>}
             <div className="gjs-canvas-viewport-controls" aria-label="Zoom y movimiento del lienzo">
               <button
                 aria-label="Mover lienzo"
@@ -1593,6 +1998,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
                 type="button"
               >Ajustar</button>
             </div>
+            </>
           )}
           {previewActive && previewSession && (
             <EditorRuntimePreview
@@ -1695,6 +2101,32 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
               </div>
             ) : (
               <div className="gjs-flow-form">
+                <div className="gjs-flow-introduction">
+                  <span aria-hidden="true">⚡</span>
+                  <div>
+                    <strong>
+                      Interacción de {selectedElement.tag === 'BUTTON'
+                        ? 'botón'
+                        : selectedElement.tag === 'A' ? 'enlace' : 'elemento'}
+                    </strong>
+                    <p>Configura su respuesta visual y lo que ocurre al hacer clic.</p>
+                  </div>
+                </div>
+
+                <label>
+                  Animación
+                  <select
+                    aria-label="Animación de interacción"
+                    onChange={(event) => saveInteractionAnimation(event.target.value as InteractionAnimation)}
+                    value={selectedElement.interactionAnimation}
+                  >
+                    <option value="none">Ninguna</option>
+                    <option value="lift">Elevar</option>
+                    <option value="pulse">Pulso</option>
+                    <option value="glow">Resplandor</option>
+                  </select>
+                </label>
+
                 <label>
                   Al hacer clic
                   <select aria-label="Acción del flujo" disabled value="navigate">
@@ -1791,6 +2223,18 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = fals
           initialName={renamingPage.name}
           onClose={() => setRenamingPage(null)}
           onRename={savePageName}
+        />
+      )}
+      {authSettings && (
+        <AuthSettingsDialog
+          action={authSettings.action}
+          destinationPageId={authSettings.destinationPageId ?? ''}
+          onClose={() => {
+            setAuthSettings(null)
+            authSettingsComponentRef.current = null
+          }}
+          onSave={saveAuthSettings}
+          pages={pages}
         />
       )}
       {motionDialogOpen && selectedMotionComponent && (
