@@ -32,6 +32,9 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_EDITOR_SUPABASE_URL: ${{ vars.VITE_EDITOR_SUPABASE_URL }}
+          VITE_EDITOR_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_EDITOR_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
