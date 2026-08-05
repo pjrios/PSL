@@ -6,9 +6,17 @@ import type { EditorProjectRecord } from './client'
 
 export interface EditorAccountContext {
   email: string
+  isGuest: boolean
   project: EditorProjectRecord
   signOut: () => Promise<void>
   userId: string
+}
+
+const guestProject: EditorProjectRecord = {
+  id: 'guest-local',
+  name: 'Proyecto de invitado',
+  owner_id: 'guest-local',
+  project_data: {},
 }
 
 export function EditorAccountGate({ children }: { children: (account: EditorAccountContext) => ReactNode }) {
@@ -21,6 +29,7 @@ export function EditorAccountGate({ children }: { children: (account: EditorAcco
   const [password, setPassword] = useState('')
   const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [guest, setGuest] = useState(false)
 
   useEffect(() => {
     if (!editorSupabase) {
@@ -89,8 +98,18 @@ export function EditorAccountGate({ children }: { children: (account: EditorAcco
     if (error) setNotice(error.message)
   }
 
+  if (guest) {
+    return children({
+      email: 'Invitado',
+      isGuest: true,
+      project: guestProject,
+      signOut: async () => setGuest(false),
+      userId: 'guest-local',
+    })
+  }
+
   if (!editorPlatformConfigured) {
-    return <main className="editor-account-screen"><section className="editor-account-card"><strong>Falta configurar Supabase</strong><p>Añade la URL y la publishable key del proyecto del editor.</p></section></main>
+    return <main className="editor-account-screen"><section className="editor-account-card"><strong>Falta configurar Supabase</strong><p>Añade la URL y la publishable key del proyecto del editor para habilitar cuentas, o continúa como invitado.</p><button className="editor-account-guest" onClick={() => setGuest(true)} type="button">Continuar como invitado</button></section></main>
   }
 
   if (loading) return <main className="editor-account-screen"><div className="editor-account-loading">Abriendo tu editor…</div></main>
@@ -98,6 +117,7 @@ export function EditorAccountGate({ children }: { children: (account: EditorAcco
   if (session && project) {
     return children({
       email: session.user.email ?? 'Cuenta del editor',
+      isGuest: false,
       project,
       signOut,
       userId: session.user.id,
@@ -118,10 +138,11 @@ export function EditorAccountGate({ children }: { children: (account: EditorAcco
           <label>Contraseña<input autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} minLength={8} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} /></label>
           <button className="editor-account-primary" disabled={submitting} type="submit">{submitting ? 'Espera…' : mode === 'login' ? 'Entrar al editor' : 'Crear mi cuenta'}</button>
         </form>
+        <div className="editor-account-separator"><span>o</span></div>
+        <button className="editor-account-guest" onClick={() => setGuest(true)} type="button">Continuar como invitado</button>
         {notice && <p className="editor-account-notice" role="status">{notice}</p>}
-        <small>Las conexiones privadas nunca se incluyen en los sitios exportados.</small>
+        <small>El trabajo de invitado se guarda solamente en este navegador. Las conexiones privadas requieren una cuenta.</small>
       </section>
     </main>
   )
 }
-

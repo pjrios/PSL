@@ -17,16 +17,27 @@ export const MOTION_RESULTS_BLOCK_ID = 'motion-results'
 const motionIcon = '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="m24 13-7 10 7 6 7-6-7-10Zm0 16v13m0-7-8 7m8-7 8 7M17 23l-9-4m23 4 9-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>'
 
 export const motionComponentStyles = `
-.motion-activity{display:grid;gap:1rem;width:100%;padding:clamp(1rem,3vw,1.5rem);color:#17211f;background:linear-gradient(145deg,#fff,#f5f8f7);border:1px solid #d8e2e0;border-radius:1rem;box-shadow:0 .8rem 2rem rgba(20,48,44,.08)}
+.motion-activity{display:grid;align-content:start;gap:1rem;width:100%;height:auto!important;min-width:0;max-width:100%;padding:clamp(1rem,3vw,1.5rem);color:#17211f;background:linear-gradient(145deg,#fff,#f5f8f7);border:1px solid #d8e2e0;border-radius:1rem;box-shadow:0 .8rem 2rem rgba(20,48,44,.08)}
 .motion-activity__heading{display:grid;gap:.35rem}
 .motion-activity__eyebrow{margin:0;color:#52706b;font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
 .motion-activity__heading h2{margin:0;font:inherit;font-size:clamp(1.25rem,3vw,1.75rem);font-weight:800}
-.motion-input{position:relative;display:grid;place-items:center;overflow:hidden;min-height:clamp(15rem,42vw,28rem);color:white;background:radial-gradient(circle at 50% 42%,#243a36 0,#172521 42%,#111a18 100%);border:1px solid rgba(255,255,255,.08);border-radius:.8rem}
+.motion-input{position:relative;display:grid;place-items:center;overflow:hidden;width:100%;height:auto!important;min-height:0;max-height:none;aspect-ratio:4/3;color:white;background:radial-gradient(circle at 50% 42%,#243a36 0,#172521 42%,#111a18 100%);border:1px solid rgba(255,255,255,.08);border-radius:.8rem}
 .motion-input video,.motion-input canvas{position:absolute;inset:0;width:100%;height:100%}
-.motion-input video{object-fit:cover}
+.motion-input video{object-fit:cover;background:#10221f}
 .motion-input canvas{pointer-events:none}
-.motion-crop-box{position:absolute;z-index:3;display:block;pointer-events:none;border:3px solid #ffd166;background:rgba(255,209,102,.12);box-shadow:0 0 0 9999px rgba(4,18,16,.48);border-radius:.35rem}
+.motion-activity[data-motion-component-type="reference-view"]{height:auto!important;min-width:0;max-width:100%;align-content:start}
+.motion-activity[data-motion-component-type="reference-view"] .motion-input{width:100%;min-height:0;max-height:none;aspect-ratio:16/9}
+.motion-activity[data-motion-component-type="reference-view"] .motion-input video{object-fit:contain;background:#10221f}
+.motion-activity[data-motion-component-type="reference-view"] .motion-controls{align-items:center}
+.motion-activity[data-motion-component-type="reference-view"] [data-motion-reference-status]{min-width:0;overflow-wrap:anywhere}
+.motion-crop-box{position:absolute;z-index:3;display:block;pointer-events:auto;touch-action:none;border:3px solid #ffd166;background:rgba(255,209,102,.12);box-shadow:0 0 0 9999px rgba(4,18,16,.48);border-radius:.35rem;cursor:move}
 .motion-crop-box[hidden]{display:none}
+.motion-crop-handle{position:absolute;z-index:1;margin:0;padding:0;background:#fff;border:2px solid #176f69;border-radius:999px;box-shadow:0 1px 4px rgba(0,0,0,.28)}
+.motion-crop-handle[data-motion-crop-handle="top"],.motion-crop-handle[data-motion-crop-handle="bottom"]{left:50%;width:2.5rem;height:.75rem;transform:translateX(-50%);cursor:ns-resize}
+.motion-crop-handle[data-motion-crop-handle="top"]{top:-.45rem}.motion-crop-handle[data-motion-crop-handle="bottom"]{bottom:-.45rem}
+.motion-crop-handle[data-motion-crop-handle="left"],.motion-crop-handle[data-motion-crop-handle="right"]{top:50%;width:.75rem;height:2.5rem;transform:translateY(-50%);cursor:ew-resize}
+.motion-crop-handle[data-motion-crop-handle="left"]{left:-.45rem}.motion-crop-handle[data-motion-crop-handle="right"]{right:-.45rem}
+.motion-crop-handle:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .motion-input.is-cropping{cursor:crosshair}
 .motion-input.is-mirrored video,.motion-input.is-mirrored canvas{transform:scaleX(-1)}
 .motion-input__placeholder{position:relative;z-index:1;max-width:32rem;display:grid;justify-items:center;gap:.4rem;padding:2.5rem;text-align:center}
@@ -74,7 +85,12 @@ export function motionInputMarkup() {
   return `<div data-motion-part="input" class="motion-input">
     <video data-motion-camera autoplay muted playsinline hidden></video>
     <canvas data-motion-overlay hidden></canvas>
-    <div data-motion-crop-box class="motion-crop-box" hidden aria-hidden="true"></div>
+    <div data-motion-crop-box class="motion-crop-box" hidden aria-label="Área seleccionada. Arrástrala para moverla.">
+      <button data-motion-crop-handle="top" class="motion-crop-handle" type="button" aria-label="Ajustar borde superior"></button>
+      <button data-motion-crop-handle="right" class="motion-crop-handle" type="button" aria-label="Ajustar borde derecho"></button>
+      <button data-motion-crop-handle="bottom" class="motion-crop-handle" type="button" aria-label="Ajustar borde inferior"></button>
+      <button data-motion-crop-handle="left" class="motion-crop-handle" type="button" aria-label="Ajustar borde izquierdo"></button>
+    </div>
     <div data-motion-placeholder class="motion-input__placeholder">
       <span class="motion-input__icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M8 6h16a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Zm8 5v10m-5-5h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>
       <strong>Entrada de movimiento</strong>
@@ -241,9 +257,15 @@ export function upgradeMotionActivity(component: Component) {
     class: [...new Set(`${component.getAttributes().class ?? ''} motion-activity`.split(/\s+/).filter(Boolean))].join(' '),
   })
   component.set('name', componentDefinition(componentType).label)
+  let repairedResponsiveHeight = false
+  const currentStyle = component.getStyle()
+  if (componentType === 'reference-view' && currentStyle.height && currentStyle.height !== 'auto') {
+    component.setStyle({ ...currentStyle, height: 'auto' })
+    repairedResponsiveHeight = true
+  }
   if (hasValidMotionComposition(component) && (
     layoutVersion === '3' || (layoutVersion === '2' && componentType !== 'reference-view')
-  )) return false
+  )) return repairedResponsiveHeight
   component.components(motionActivityContents(componentType))
   component.setStyle({})
   return true

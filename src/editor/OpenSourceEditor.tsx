@@ -9,14 +9,8 @@ import tabs from 'grapesjs-tabs'
 import touch from 'grapesjs-touch'
 import imageEditor from 'grapesjs-tui-image-editor'
 import 'grapesjs/dist/css/grapes.min.css'
-import handSvg from '../../examples/three-screen-demo/assets/hand.svg?raw'
-import {
-  installLspStarterProject,
-  lspStarterCss,
-  lspStarterPages,
-  lspStarterSupabaseConfig,
-} from '../starter/lsp-learning-project'
 import { loadEditorProjectData, saveEditorProjectData } from '../editor-platform'
+import type { EditorProjectData } from '../editor-platform'
 import {
   FLOW_ACTION_ATTRIBUTE,
   FLOW_TARGET_ATTRIBUTE,
@@ -39,7 +33,6 @@ import {
   DATA_SOURCE_ATTRIBUTE,
   DATA_REPEATER_ATTRIBUTE,
   DATA_SCOPE_ATTRIBUTE,
-  loadSupabaseConfig,
   normalizedSupabaseConfig,
   storeSupabaseConfig,
 } from './supabase-data'
@@ -117,6 +110,13 @@ type CanvasViewState = {
 }
 
 const DATA_COMPONENT_BLOCK_ID = 'psl-data-component'
+const GUEST_PROJECT_STORAGE_KEY = 'psl-editor-guest-project-v1'
+const BLANK_PAGE = { id: 'page-1', name: 'Página 1', component: '' } as const
+const EMPTY_SUPABASE_CONFIG: SupabaseEditorConfig = {
+  projectUrl: '',
+  publishableKey: '',
+  tables: [],
+}
 const SUPABASE_BLOCK_ICONS = {
   login: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="19" cy="15" r="7" fill="none" stroke="currentColor" stroke-width="3"/><path d="M7 39c1-8 5-12 12-12 4 0 7 1 9 4M31 17h12m-5-5 5 5-5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>',
   signup: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="18" cy="15" r="7" fill="none" stroke="currentColor" stroke-width="3"/><path d="M6 39c1-8 5-12 12-12 6 0 10 3 12 9M37 16v12m-6-6h12" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="3"/></svg>',
@@ -124,6 +124,15 @@ const SUPABASE_BLOCK_ICONS = {
   email: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="m7 14 17 13 17-13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>',
   data: '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="8" width="38" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="M5 18h38M16 18v22M29 18v22" fill="none" stroke="currentColor" stroke-width="3"/></svg>',
 } as const
+
+function loadGuestProjectData(): EditorProjectData {
+  const saved = JSON.parse(localStorage.getItem(GUEST_PROJECT_STORAGE_KEY) ?? 'null') as EditorProjectData | null
+  return saved && typeof saved === 'object' ? saved : {}
+}
+
+function saveGuestProjectData(projectData: EditorProjectData) {
+  localStorage.setItem(GUEST_PROJECT_STORAGE_KEY, JSON.stringify(projectData))
+}
 
 function summarizeComponent(component?: Component | null): ElementSummary | null {
   if (!component) return null
@@ -307,6 +316,10 @@ export function installEditorCanvasLayoutGuards(
       --psl-editor-data-card-height: 320px;
       --psl-editor-data-list-height: 180px;
     }
+    html,
+    body {
+      min-height: var(--psl-editor-viewport-height) !important;
+    }
     :where(.demo-page, .screen, .tpl-wrap, .tpl-dash-side, .psl-auth-page, .psl-auth-brand, .psl-auth-content, .lsp-page) {
       min-height: var(--psl-editor-viewport-height) !important;
     }
@@ -439,9 +452,10 @@ function floatingMenuPosition(buttonRect: DOMRect, menuWidth: number, menuHeight
   return { left, top }
 }
 
-export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
+export function OpenSourceEditor({ accountEmail, editorProjectId, isGuest = false, onSignOut }: {
   accountEmail: string
   editorProjectId: string
+  isGuest?: boolean
   onSignOut: () => Promise<void>
 }) {
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -459,11 +473,13 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
   const currentCanvasDeviceRef = useRef('desktop')
   const editingDataComponentRef = useRef<Component | null>(null)
   const panToolLockedRef = useRef(false)
-  const initialSupabaseConfigRef = useRef(loadSupabaseConfig())
+  const initialSupabaseConfigRef = useRef(EMPTY_SUPABASE_CONFIG)
   const supabaseConfigRef = useRef(initialSupabaseConfigRef.current)
   const [error, setError] = useState<string | null>(null)
-  const [pages, setPages] = useState(lspStarterPages.map(({ id, name }) => ({ id, name })))
-  const [activePageId, setActivePageId] = useState(lspStarterPages[0].id)
+  const [pages, setPages] = useState<Array<{ id: string; name: string }>>([
+    { id: BLANK_PAGE.id, name: BLANK_PAGE.name },
+  ])
+  const [activePageId, setActivePageId] = useState<string>(BLANK_PAGE.id)
   const [rightPanel, setRightPanel] = useState<'styles' | 'properties' | 'motion' | 'flow' | 'data'>('styles')
   const [blocksOpen, setBlocksOpen] = useState(false)
   const [dataComponentEditRequest, setDataComponentEditRequest] = useState<DataComponentEditRequest | null>(null)
@@ -512,7 +528,9 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
         editor.Storage.add('editor-account', {
           async load() {
             try {
-              const projectData = await loadEditorProjectData(editorProjectId)
+              const projectData = isGuest
+                ? loadGuestProjectData()
+                : await loadEditorProjectData(editorProjectId)
               if (projectData.supabaseConfig) {
                 const nextConfig = normalizedSupabaseConfig(
                   projectData.supabaseConfig as unknown as SupabaseEditorConfig,
@@ -526,11 +544,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
                 return normalizedGrapesProjectData(projectData.grapesjs)
               }
 
-              const nextConfig = normalizedSupabaseConfig({
-                ...lspStarterSupabaseConfig,
-                projectUrl: supabaseConfigRef.current.projectUrl,
-                publishableKey: supabaseConfigRef.current.publishableKey,
-              })
+              const nextConfig = normalizedSupabaseConfig(EMPTY_SUPABASE_CONFIG)
               supabaseConfigRef.current = nextConfig
               setSupabaseConfig(nextConfig)
               storeSupabaseConfig(nextConfig)
@@ -542,12 +556,16 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
           },
           async store(data) {
             try {
-              await saveEditorProjectData(editorProjectId, {
+              const projectData = {
                 grapesjs: data as Record<string, unknown>,
                 supabaseConfig: supabaseConfigRef.current as unknown as Record<string, unknown>,
-              })
+              }
+              if (isGuest) saveGuestProjectData(projectData)
+              else await saveEditorProjectData(editorProjectId, projectData)
             } catch (cause: unknown) {
-              setError(cause instanceof Error ? cause.message : 'No se pudo guardar el proyecto en tu cuenta.')
+              setError(cause instanceof Error ? cause.message : isGuest
+                ? 'No se pudo guardar el proyecto en este navegador.'
+                : 'No se pudo guardar el proyecto en tu cuenta.')
             }
             return data
           },
@@ -619,17 +637,11 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
           },
         },
         pageManager: {
-          pages: lspStarterPages.map((page) => ({
-            id: page.id,
-            name: page.name,
-            component: page.component,
-          })),
+          pages: [BLANK_PAGE],
         },
-        style: lspStarterCss,
+        style: '',
         assetManager: {
-          assets: [
-            `data:image/svg+xml;charset=utf-8,${encodeURIComponent(handSvg)}`,
-          ],
+          assets: [],
           uploadFile: (event) => {
             const uploadEvent = event as unknown as {
               dataTransfer?: DataTransfer | null
@@ -655,7 +667,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
       })
 
       editorRef.current = editor
-      editor.Pages.select(lspStarterPages[0].id)
+      editor.Pages.select(BLANK_PAGE.id)
       editor.BlockManager.get('tabs')?.set('category', 'Extra')
 
       const authFormStyle = 'display:grid;gap:12px;max-width:420px;padding:24px;background:#fff;border:1px solid #d8e3e1;border-radius:12px'
@@ -895,7 +907,10 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
         const canvasDocument = editor.Canvas.getDocument()
         const visibleCanvasHeight = canvasColumnRef.current?.clientHeight ?? DEFAULT_EDITOR_VIEWPORT_HEIGHT_CAP
         const heightCap = Math.min(960, Math.max(480, visibleCanvasHeight))
-        if (!canvasDocument || installEditorCanvasLayoutGuards(canvasDocument, heightCap) === 0) return
+        if (!canvasDocument) return
+        const guardedLayoutCount = installEditorCanvasLayoutGuards(canvasDocument, heightCap)
+        const frameHeight = editor.Canvas.getFrameEl()?.getBoundingClientRect().height ?? 0
+        if (guardedLayoutCount === 0 && frameHeight > 0) return
         canvasViewsRef.current.clear()
         editor.Canvas.setCoords(0, 0)
         requestAnimationFrame(() => {
@@ -1389,29 +1404,8 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
     const pageNumber = editor.Pages.getAll().length + 1
     editor.Pages.add({
       name: `Página ${pageNumber}`,
-      component: '<main><h1>Nueva página</h1><p>Arrastra bloques para comenzar.</p></main>',
+      component: '',
     }, { select: true })
-  }
-
-  function openLspStarterProject() {
-    const editor = editorRef.current
-    if (!editor) return
-    const confirmed = window.confirm(
-      '¿Abrir el proyecto “Aprende LSP”? Esto reemplazará las páginas y estilos del sitio abierto. Esta acción no se puede deshacer.',
-    )
-    if (!confirmed) return
-
-    installLspStarterProject(editor)
-    const nextConfig = normalizedSupabaseConfig(lspStarterSupabaseConfig)
-    supabaseConfigRef.current = nextConfig
-    setSupabaseConfig(nextConfig)
-    storeSupabaseConfig(nextConfig)
-    setCreateMenuOpen(false)
-    setTemplateGalleryOpen(false)
-    setFlowNotice('Proyecto “Aprende LSP” abierto y guardado en el editor.')
-    void editor.store().catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : 'No se pudo guardar el proyecto Aprende LSP.')
-    })
   }
 
   function addTemplatePage(templateId: string) {
@@ -1463,7 +1457,17 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
         </div>
         <div className="gjs-toolbar-account-area">
           <div className="gjs-native-options" aria-label="Herramientas del editor" ref={nativeOptionsRef} />
-          <button className="gjs-editor-account" onClick={() => void onSignOut()} title={`Cerrar sesión de ${accountEmail}`} type="button"><span aria-hidden="true">{accountEmail.slice(0, 1).toUpperCase()}</span><small>{accountEmail}</small></button>
+          <div className="gjs-editor-account"><span aria-hidden="true">{accountEmail.slice(0, 1).toUpperCase()}</span><small>{accountEmail}</small></div>
+          <button
+            aria-label={isGuest ? 'Salir del modo invitado' : 'Cerrar sesión'}
+            className="gjs-editor-signout"
+            onClick={() => void onSignOut()}
+            title={isGuest ? 'Salir del modo invitado' : `Cerrar sesión de ${accountEmail}`}
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" /></svg>
+            <span>{isGuest ? 'Salir' : 'Cerrar sesión'}</span>
+          </button>
         </div>
       </header>
 
@@ -1486,7 +1490,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
                     setCreateMenuPosition(floatingMenuPosition(
                       event.currentTarget.getBoundingClientRect(),
                       196,
-                      150,
+                      114,
                     ))
                     setCreateMenuOpen((open) => !open)
                   }}
@@ -1507,7 +1511,6 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
                       setCreateMenuOpen(false)
                       setPageImportOpen(true)
                     }} role="menuitem" type="button">Importar</button>
-                    <button onClick={openLspStarterProject} role="menuitem" type="button">Abrir proyecto Aprende LSP</button>
                   </div>
                 )}
               </div>
@@ -1751,6 +1754,7 @@ export function OpenSourceEditor({ accountEmail, editorProjectId, onSignOut }: {
               dataComponentEditRequest={dataComponentEditRequest}
               dataComponentRequest={dataComponentRequest}
               editorProjectId={editorProjectId}
+              isGuest={isGuest}
               onChange={saveSupabaseConfig}
               onInsertDataComponent={insertDataComponent}
               onRemoveBinding={removeDataBinding}

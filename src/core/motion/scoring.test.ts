@@ -65,6 +65,9 @@ describe('motion sequence scoring', () => {
     ])
     expect(stages[0].progress).toBe(0)
     expect(stages.at(-1)?.progress).toBe(1)
+    expect(stages[0].scored).toBe(false)
+    expect(stages.at(-1)?.scored).toBe(false)
+    expect(stages.slice(1, -1).every((stage) => stage.scored !== false)).toBe(true)
     expect(stages.every((stage, index) => !index || stage.progress >= stages[index - 1].progress)).toBe(true)
   })
 
@@ -75,6 +78,8 @@ describe('motion sequence scoring', () => {
     const comparisons = compareMotionStages(reference, learner, stages)
 
     expect(comparisons).toHaveLength(stages.length)
+    expect(comparisons[0].scored).toBe(false)
+    expect(comparisons.at(-1)?.scored).toBe(false)
     expect(comparisons.every((stage) => stage.score > 75)).toBe(true)
     expect(comparisons[0].learnerRange[0]).toBe(0)
     expect(comparisons.at(-1)?.learnerRange[1]).toBe(1)

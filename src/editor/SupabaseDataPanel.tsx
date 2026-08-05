@@ -65,6 +65,7 @@ interface SupabaseDataPanelProps {
   dataComponentEditRequest?: DataComponentEditRequest | null
   dataComponentRequest?: number
   editorProjectId: string
+  isGuest?: boolean
   onChange: (config: SupabaseEditorConfig) => void
   onInsertDataComponent: (templateId: DataComponentTemplateId, tableId: string, mapping: DataComponentMapping, options: DataComponentOptions) => void
   onRemoveBinding: () => void
@@ -224,9 +225,10 @@ function Modal({ children, onClose, title }: {
   )
 }
 
-function SettingsModal({ config, editorProjectId, onChange, onClose }: {
+function SettingsModal({ config, editorProjectId, isGuest, onChange, onClose }: {
   config: SupabaseEditorConfig
   editorProjectId: string
+  isGuest: boolean
   onChange: (config: SupabaseEditorConfig) => void
   onClose: () => void
 }) {
@@ -237,6 +239,7 @@ function SettingsModal({ config, editorProjectId, onChange, onClose }: {
   const [connectionNotice, setConnectionNotice] = useState('')
 
   useEffect(() => {
+    if (isGuest) return
     let active = true
     void readEditorConnection(editorProjectId).then((connection) => {
       if (active) setSavedConnection(connection)
@@ -244,7 +247,7 @@ function SettingsModal({ config, editorProjectId, onChange, onClose }: {
       if (active) setConnectionNotice(cause instanceof Error ? cause.message : 'No pudimos leer la conexión privada.')
     })
     return () => { active = false }
-  }, [editorProjectId])
+  }, [editorProjectId, isGuest])
 
   async function savePrivateConnection() {
     setSavingSecret(true)
@@ -318,21 +321,28 @@ function SettingsModal({ config, editorProjectId, onChange, onClose }: {
           <p>{config.projectUrl && safeKey && config.publishableKey ? 'Conexión lista para comprobar colecciones.' : 'Completa ambos campos para conectar.'}</p>
         </div>
         <div className="gjs-data-divider" />
-        <div className="gjs-flow-introduction">
-          <span aria-hidden="true">🔒</span>
-          <div><strong>Acceso privado del editor</strong><p>Permite comprobar tablas internas. Se cifra en el Supabase del editor y nunca se incluye al exportar.</p></div>
-        </div>
-        {savedConnection && <div className="gjs-flow-connected"><span aria-hidden="true">✓</span><p>Secret key guardada: <strong>{savedConnection.secret_hint}</strong></p></div>}
-        <label>
-          {savedConnection ? 'Reemplazar secret key' : 'Secret key'}
-          <input autoComplete="off" onChange={(event) => setSecretKey(event.target.value)} placeholder="sb_secret_..." type="password" value={secretKey} />
-        </label>
-        <p className="gjs-data-safety">Usa una secret key dedicada para el editor. Puedes revocarla desde Supabase cuando quieras.</p>
-        <div className="gjs-data-actions">
-          <button className="gjs-flow-primary" disabled={savingSecret || !safeKey || !config.projectUrl || !config.publishableKey || !secretKey.startsWith('sb_secret_')} onClick={savePrivateConnection} type="button">{savingSecret ? 'Guardando…' : savedConnection ? 'Reemplazar clave' : 'Guardar acceso privado'}</button>
-          {savedConnection ? <button className="gjs-flow-secondary" disabled={savingSecret} onClick={removePrivateConnection} type="button">Quitar acceso</button> : <span />}
-        </div>
-        {connectionNotice && <p className="gjs-data-modal-notice" role="status">{connectionNotice}</p>}
+        {isGuest ? (
+          <div className="gjs-flow-introduction">
+            <span aria-hidden="true">🔒</span>
+            <div><strong>Acceso privado no disponible</strong><p>Inicia sesión para guardar una conexión privada cifrada y comprobar tablas internas.</p></div>
+          </div>
+        ) : <>
+          <div className="gjs-flow-introduction">
+            <span aria-hidden="true">🔒</span>
+            <div><strong>Acceso privado del editor</strong><p>Permite comprobar tablas internas. Se cifra en el Supabase del editor y nunca se incluye al exportar.</p></div>
+          </div>
+          {savedConnection && <div className="gjs-flow-connected"><span aria-hidden="true">✓</span><p>Secret key guardada: <strong>{savedConnection.secret_hint}</strong></p></div>}
+          <label>
+            {savedConnection ? 'Reemplazar secret key' : 'Secret key'}
+            <input autoComplete="off" onChange={(event) => setSecretKey(event.target.value)} placeholder="sb_secret_..." type="password" value={secretKey} />
+          </label>
+          <p className="gjs-data-safety">Usa una secret key dedicada para el editor. Puedes revocarla desde Supabase cuando quieras.</p>
+          <div className="gjs-data-actions">
+            <button className="gjs-flow-primary" disabled={savingSecret || !safeKey || !config.projectUrl || !config.publishableKey || !secretKey.startsWith('sb_secret_')} onClick={savePrivateConnection} type="button">{savingSecret ? 'Guardando…' : savedConnection ? 'Reemplazar clave' : 'Guardar acceso privado'}</button>
+            {savedConnection ? <button className="gjs-flow-secondary" disabled={savingSecret} onClick={removePrivateConnection} type="button">Quitar acceso</button> : <span />}
+          </div>
+          {connectionNotice && <p className="gjs-data-modal-notice" role="status">{connectionNotice}</p>}
+        </>}
       </div>
     </Modal>
   )
@@ -696,9 +706,10 @@ function DataComponentWizard({ config, editMode = false, initialMapping, initial
   )
 }
 
-function TableModal({ config, editorProjectId, onChange, onClose, tableId }: {
+function TableModal({ config, editorProjectId, isGuest, onChange, onClose, tableId }: {
   config: SupabaseEditorConfig
   editorProjectId: string
+  isGuest: boolean
   onChange: (config: SupabaseEditorConfig) => void
   onClose: () => void
   tableId: string
@@ -786,6 +797,11 @@ function TableModal({ config, editorProjectId, onChange, onClose, tableId }: {
   }
 
   async function verify() {
+    if (isGuest && (table.access === 'authenticated_read' || table.access === 'user_owned')
+      && !readSupabaseAccessToken(config.projectUrl)) {
+      setNotice('Inicia sesión en el editor para comprobar esta colección protegida.')
+      return
+    }
     setVerifying(true)
     setNotice('Comprobando la colección y su información…')
     try {
@@ -1186,7 +1202,7 @@ export function SupabaseDataPanel(props: SupabaseDataPanelProps) {
           {!selectedElement ? <div className="gjs-flow-empty gjs-data-empty"><strong>Selecciona un elemento</strong><p>Después elige qué información debe mostrar.</p></div> : <ElementDataControls {...props} element={selectedElement} />}
         </PanelSection>
       </div>
-      {settingsOpen && <SettingsModal config={config} editorProjectId={props.editorProjectId} onChange={onChange} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal config={config} editorProjectId={props.editorProjectId} isGuest={Boolean(props.isGuest)} onChange={onChange} onClose={() => setSettingsOpen(false)} />}
       {wizardOpen && <CollectionWizard config={config} onClose={() => {
         setWizardOpen(false)
         setPendingDataTemplate(undefined)
@@ -1210,7 +1226,7 @@ export function SupabaseDataPanel(props: SupabaseDataPanelProps) {
           setDataComponentDefaults({})
         }}
       />}
-      {openTableId && <TableModal config={config} editorProjectId={props.editorProjectId} onChange={(next) => onChange(normalizedSupabaseConfig(next))} onClose={() => setOpenTableId(null)} tableId={openTableId} />}
+      {openTableId && <TableModal config={config} editorProjectId={props.editorProjectId} isGuest={Boolean(props.isGuest)} onChange={(next) => onChange(normalizedSupabaseConfig(next))} onClose={() => setOpenTableId(null)} tableId={openTableId} />}
     </>
   )
 }

@@ -85,6 +85,19 @@ body {
   font-weight: 800;
 }
 .editor-account-primary:disabled { cursor: wait; opacity: .65; }
+.editor-account-separator { display: flex; align-items: center; gap: 10px; color: #71717a; font-size: 11px; }
+.editor-account-separator::before,
+.editor-account-separator::after { height: 1px; flex: 1; content: ''; background: #303238; }
+.editor-account-guest {
+  min-height: 42px;
+  color: #e4e4e7;
+  background: transparent;
+  border: 1px solid #44464e;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 800;
+}
+.editor-account-guest:hover { color: white; border-color: #7c5cff; background: rgba(124, 92, 255, .08); }
 .editor-account-notice { padding: 10px; color: #f4d09b !important; background: #34291c; border: 1px solid #674d2e; border-radius: 6px; font-size: 12px; }
 .editor-account-card > small { color: #85858e; line-height: 1.45; }
 .editor-account-loading { color: #c8bfff; font-weight: 750; }
@@ -199,11 +212,25 @@ body {
   background: var(--ve-gray);
   border: 1px solid var(--ve-border);
   border-radius: 6px;
-  cursor: pointer;
 }
 .gjs-editor-account > span { width: 24px; height: 24px; display: grid; place-items: center; color: white; background: var(--ve-purple); border-radius: 4px; font-weight: 800; }
 .gjs-editor-account small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gjs-editor-account:hover { color: white; border-color: #555862; }
+.gjs-editor-signout {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: var(--ve-muted);
+  background: transparent;
+  border: 1px solid var(--ve-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+}
+.gjs-editor-signout svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.gjs-editor-signout:hover { color: white; border-color: #6b5bd2; background: rgba(124, 92, 255, .1); }
 .gjs-native-toolbar-panel {
   position: static !important;
   inset: auto !important;

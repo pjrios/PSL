@@ -9,6 +9,7 @@ export default function App() {
     : <OpenSourceEditor
         accountEmail={account.email}
         editorProjectId={account.project.id}
+        isGuest={account.isGuest}
         onSignOut={account.signOut}
       />}</EditorAccountGate>
 }

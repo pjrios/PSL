@@ -151,7 +151,8 @@ const suggestMotionStages = function suggestMotionStages(frames) {
 	if (frames.length === 1) return [{
 		id: "start",
 		label: "Inicio",
-		progress: 0
+		progress: 0,
+		scored: false
 	}];
 	const cumulative = [0];
 	for (let index = 1; index < frames.length; index += 1) {
@@ -172,13 +173,15 @@ const suggestMotionStages = function suggestMotionStages(frames) {
 		{
 			id: "start",
 			label: "Inicio",
-			progress: 0
+			progress: 0,
+			scored: false
 		},
 		...keyStages,
 		{
 			id: "end",
 			label: "Final",
-			progress: 1
+			progress: 1,
+			scored: false
 		}
 	];
 };
@@ -307,7 +310,7 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 		if (!Array.isArray(value) || !Array.isArray(value[0])) return [];
 		return value[0];
 	}
-	function drawHolisticOverlay(canvas, sourceWidth, sourceHeight, result, features) {
+	function drawHolisticOverlay(canvas, sourceWidth, sourceHeight, result, features, fit = "contain") {
 		const width = canvas.clientWidth || 640;
 		const height = canvas.clientHeight || 480;
 		const pixelRatio = Math.min(runtimeWindow.devicePixelRatio || 1, 2);
@@ -321,12 +324,12 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 		context.clearRect(0, 0, width, height);
 		context.lineCap = "round";
 		context.lineJoin = "round";
-		// Match the video's object-fit: cover calculation exactly. Drawing
+		// Match the video's object-fit calculation exactly. Drawing
 		// directly in visible CSS pixels avoids relying on canvas object-fit,
 		// whose intrinsic sizing can differ from the video after resizing.
-		const coverScale = Math.max(width / sourceWidth, height / sourceHeight);
-		const renderedWidth = sourceWidth * coverScale;
-		const renderedHeight = sourceHeight * coverScale;
+		const fitScale = fit === "cover" ? Math.max(width / sourceWidth, height / sourceHeight) : Math.min(width / sourceWidth, height / sourceHeight);
+		const renderedWidth = sourceWidth * fitScale;
+		const renderedHeight = sourceHeight * fitScale;
 		const offsetX = (width - renderedWidth) / 2;
 		const offsetY = (height - renderedHeight) / 2;
 		const point = (landmark) => ({
@@ -830,7 +833,8 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 			const stages = Array.isArray(record.stages) ? record.stages.filter((stage) => Boolean(stage && typeof stage === "object" && typeof stage.id === "string" && typeof stage.label === "string" && Number.isFinite(stage.progress))).map((stage) => ({
 				id: stage.id,
 				label: stage.label,
-				progress: Math.max(0, Math.min(1, stage.progress))
+				progress: Math.max(0, Math.min(1, stage.progress)),
+				scored: stage.scored !== false
 			})).sort((left, right) => left.progress - right.progress) : [];
 			return {
 				durationMs: Number.isFinite(record.durationMs) ? Number(record.durationMs) : frames.at(-1)?.t ?? 0,
@@ -1090,10 +1094,81 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 		let cropping = false;
 		let cropStart;
 		let cropDraft;
+		let cropOrigin;
+		let cropInteraction;
 		let editableStages = [];
 		let timelineCursorProgress = 0;
 		let referenceSourceMode = "camera";
+		let displayedReferenceFrame;
 		const preparedClipInput = fileInput;
+		const referenceStage = referencePreview?.parentElement;
+		const syncReferencePresentation = () => {
+			if (!referenceStage || !referencePreview) return;
+			const crop = previewTemplate?.storedClip ? undefined : previewTemplate?.sourceCrop;
+			const storedFrame = previewTemplate?.storedClip ? previewTemplate.landmarkFrames[0] : undefined;
+			const sourceWidth = storedFrame?.width || referenceVideo?.videoWidth || (crop ? undefined : previewTemplate?.landmarkFrames[0]?.width) || 16;
+			const sourceHeight = storedFrame?.height || referenceVideo?.videoHeight || (crop ? undefined : previewTemplate?.landmarkFrames[0]?.height) || 9;
+			// Stored clips and their landmarks were created from the same canvas, so
+			// its frame dimensions are the authoritative presentation ratio. Using
+			// media metadata here can turn a landscape analysis into a tall stage.
+			if (sourceWidth > 0 && sourceHeight > 0) {
+				referenceStage.style.aspectRatio = `${sourceWidth} / ${sourceHeight}`;
+			};
+			referenceStage.style.width = "100%";
+			referenceStage.style.height = "auto";
+			referenceStage.style.minHeight = "0";
+			referenceStage.style.maxHeight = "none";
+			referenceStage.style.alignSelf = "start";
+			if (activity.componentType === "reference-view") {
+				root.style.height = "auto";
+				root.style.minHeight = "0";
+				root.style.alignContent = "start";
+			};
+			if (referenceVideo) {
+				referenceVideo.style.objectFit = previewTemplate?.storedClip ? "cover" : "contain";
+				referenceVideo.style.width = "100%";
+				referenceVideo.style.height = "100%";
+				referenceVideo.style.left = "0";
+				referenceVideo.style.top = "0";
+				referenceVideo.style.transformOrigin = "50% 50%";
+			};
+			// Landmark coordinates were captured relative to sourceCrop. Keep the
+			// full video visible and place the overlay canvas over that rectangle.
+			// Mirrored reference stages need the rectangle mirrored as well.
+			if (crop && referenceVideo?.videoWidth) {
+				const videoTransform = runtimeWindow.getComputedStyle(referenceVideo).transform;
+				const mirrored = videoTransform !== "none" && (videoTransform.startsWith("matrix(-1,") || videoTransform.startsWith("matrix3d(-1,"));
+				const cropLeft = mirrored ? 1 - crop.x - crop.width : crop.x;
+				referencePreview.style.left = `${cropLeft * 100}%`;
+				referencePreview.style.top = `${crop.y * 100}%`;
+				referencePreview.style.width = `${crop.width * 100}%`;
+				referencePreview.style.height = `${crop.height * 100}%`;
+			} else {
+				referencePreview.style.left = "0";
+				referencePreview.style.top = "0";
+				referencePreview.style.width = "100%";
+				referencePreview.style.height = "100%";
+			};
+			referencePreview.style.right = "auto";
+			referencePreview.style.bottom = "auto";
+		};
+		const drawReferenceFrame = (frame) => {
+			if (!referencePreview) return;
+			displayedReferenceFrame = frame;
+			syncReferencePresentation();
+			drawHolisticOverlay(referencePreview, frame.width, frame.height, frame, activity.features);
+		};
+		const redrawDisplayedReference = () => {
+			const frame = displayedReferenceFrame;
+			if (!frame) return;
+			syncReferencePresentation();
+			runtimeWindow.requestAnimationFrame(() => {
+				if (displayedReferenceFrame === frame) drawReferenceFrame(frame);
+			});
+		};
+		const ResizeObserverConstructor = runtimeWindow.ResizeObserver;
+		const referenceResizeObserver = referenceStage && typeof ResizeObserverConstructor === "function" ? new ResizeObserverConstructor(redrawDisplayedReference) : undefined;
+		if (referenceStage) referenceResizeObserver?.observe(referenceStage);
 		const selectedSourceCrop = () => manualCrop;
 		const applyVideoCrop = (element, crop) => {
 			if (!crop) {
@@ -1165,7 +1240,8 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 			editableStages = stages.map((stage) => ({
 				id: stage.id,
 				label: stage.label,
-				progress: Math.max(0, Math.min(1, stage.progress))
+				progress: Math.max(0, Math.min(1, stage.progress)),
+				scored: stage.scored !== false
 			})).sort((left, right) => left.progress - right.progress);
 			stageEditor.hidden = !editableStages.length;
 			if (!editableStages.length) {
@@ -1198,7 +1274,7 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				const fixed = stage.id === "start" || stage.id === "end";
 				const marker = runtimeDocument.createElement("button");
 				marker.type = "button";
-				marker.className = `motion-stage-marker${fixed ? " is-fixed" : ""}`;
+				marker.className = `motion-stage-marker${fixed ? " is-fixed" : ""}${stage.scored === false ? " is-not-scored" : ""}`;
 				marker.style.left = `${stage.progress * 100}%`;
 				marker.dataset.motionStageId = stage.id;
 				marker.setAttribute("role", "slider");
@@ -1208,7 +1284,7 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				marker.setAttribute("aria-valuenow", String(Math.round(stage.progress * 100)));
 				const markerLabel = runtimeDocument.createElement("span");
 				markerLabel.className = "motion-stage-marker__label";
-				markerLabel.textContent = stage.label;
+				markerLabel.textContent = stage.scored === false ? `${stage.label} · no cuenta` : stage.label;
 				marker.append(markerLabel);
 				const updateStagePosition = (progress) => {
 					if (fixed) return;
@@ -1280,7 +1356,21 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				persistStageDefinitions("Momento eliminado. Guarda la práctica para conservar el cambio.");
 				renderStageEditor(editableStages);
 			});
-			inspector.append(labelField, output, remove);
+			const scoreToggle = runtimeDocument.createElement("label");
+			scoreToggle.className = "motion-stage-score-toggle";
+			scoreToggle.hidden = selected.id !== "start" && selected.id !== "end";
+			const scoreCheckbox = runtimeDocument.createElement("input");
+			scoreCheckbox.type = "checkbox";
+			scoreCheckbox.checked = selected.scored !== false;
+			const scoreToggleText = runtimeDocument.createElement("span");
+			scoreToggleText.textContent = "Contar en puntuación";
+			scoreCheckbox.addEventListener("change", () => {
+				selected.scored = scoreCheckbox.checked;
+				persistStageDefinitions(scoreCheckbox.checked ? `${selected.label} contará en la puntuación.` : `${selected.label} no contará en la puntuación.`);
+				renderStageEditor(editableStages, selected.id);
+			});
+			scoreToggle.append(scoreCheckbox, scoreToggleText);
+			inspector.append(labelField, output, scoreToggle, remove);
 			motionInput?.querySelector("[data-motion-stage-overlay]")?.remove();
 			motionInput?.append(timeline);
 			stageList.replaceChildren(inspector);
@@ -1376,6 +1466,16 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				y: Math.max(bounds.y, Math.min(bounds.y + bounds.height, event.clientY - container.top))
 			};
 		};
+		const storedCropRectangle = () => {
+			const bounds = containedVideoBounds();
+			if (!bounds || !manualCrop) return undefined;
+			return {
+				x: bounds.x + manualCrop.x * bounds.width,
+				y: bounds.y + manualCrop.y * bounds.height,
+				width: manualCrop.width * bounds.width,
+				height: manualCrop.height * bounds.height
+			};
+		};
 		const beginCrop = (event) => {
 			if (!cropping) return;
 			const point = cropPoint(event);
@@ -1385,39 +1485,90 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				x: point.x,
 				y: point.y
 			};
-			cropDraft = undefined;
-			if (cropBox) cropBox.hidden = true;
+			const target = event.target;
+			const handle = target.closest("[data-motion-crop-handle]");
+			const rectangle = storedCropRectangle();
+			if (handle && rectangle) {
+				cropInteraction = handle.dataset.motionCropHandle;
+				cropOrigin = rectangle;
+				cropDraft = rectangle;
+			} else if (cropBox?.contains(target) && rectangle) {
+				cropInteraction = "move";
+				cropOrigin = rectangle;
+				cropDraft = rectangle;
+			} else {
+				cropInteraction = "draw";
+				cropOrigin = undefined;
+				cropDraft = undefined;
+				if (cropBox) cropBox.hidden = true;
+			};
 			motionInput?.setPointerCapture?.(event.pointerId);
 		};
 		const updateCrop = (event) => {
-			if (!cropping || !cropStart) return;
+			if (!cropping || !cropStart || !cropInteraction) return;
 			const point = cropPoint(event);
 			if (!point) return;
 			event.preventDefault();
-			const horizontal = point.x - cropStart.x;
-			const vertical = point.y - cropStart.y;
-			let width = Math.abs(horizontal);
-			let height = Math.abs(vertical);
-			const aspect = (motionInput?.clientWidth || 16) / (motionInput?.clientHeight || 9);
-			if (width / Math.max(height, 1) > aspect) width = height * aspect;
-			else height = width / aspect;
-			cropDraft = {
-				x: horizontal < 0 ? cropStart.x - width : cropStart.x,
-				y: vertical < 0 ? cropStart.y - height : cropStart.y,
-				width,
-				height
+			const bounds = point.bounds;
+			const minimumWidth = Math.min(24, bounds.width);
+			const minimumHeight = Math.min(14, bounds.height);
+			const initial = cropOrigin;
+			if (cropInteraction === "draw" || !initial) {
+				cropDraft = {
+					x: Math.min(cropStart.x, point.x),
+					y: Math.min(cropStart.y, point.y),
+					width: Math.abs(point.x - cropStart.x),
+					height: Math.abs(point.y - cropStart.y)
+				};
+			} else if (cropInteraction === "move") {
+				cropDraft = {
+					...initial,
+					x: Math.max(bounds.x, Math.min(bounds.x + bounds.width - initial.width, initial.x + point.x - cropStart.x)),
+					y: Math.max(bounds.y, Math.min(bounds.y + bounds.height - initial.height, initial.y + point.y - cropStart.y))
+				};
+			} else if (cropInteraction === "left") {
+				const right = initial.x + initial.width;
+				const left = Math.max(bounds.x, Math.min(right - minimumWidth, point.x));
+				cropDraft = {
+					...initial,
+					x: left,
+					width: right - left
+				};
+			} else if (cropInteraction === "right") {
+				const right = Math.max(initial.x + minimumWidth, Math.min(bounds.x + bounds.width, point.x));
+				cropDraft = {
+					...initial,
+					width: right - initial.x
+				};
+			} else if (cropInteraction === "top") {
+				const bottom = initial.y + initial.height;
+				const top = Math.max(bounds.y, Math.min(bottom - minimumHeight, point.y));
+				cropDraft = {
+					...initial,
+					y: top,
+					height: bottom - top
+				};
+			} else {
+				const bottom = Math.max(initial.y + minimumHeight, Math.min(bounds.y + bounds.height, point.y));
+				cropDraft = {
+					...initial,
+					height: bottom - initial.y
+				};
 			};
 			renderCropBox(cropDraft);
 		};
 		const finishCrop = (event) => {
-			if (!cropping || !cropStart) return;
+			if (!cropping || !cropStart || !cropInteraction) return;
 			updateCrop(event);
 			const bounds = containedVideoBounds();
 			const draft = cropDraft;
 			cropStart = undefined;
+			cropOrigin = undefined;
+			cropInteraction = undefined;
 			cropDraft = undefined;
 			if (!bounds || !draft || draft.width < 24 || draft.height < 14) {
 				status.textContent = "Arrastra un área más grande sobre el video.";
+				renderStoredCropBox();
 				return;
 			};
 			manualCrop = {
@@ -1426,12 +1577,9 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				width: Math.min(1, draft.width / bounds.width),
 				height: Math.min(1, draft.height / bounds.height)
 			};
-			cropping = false;
-			motionInput?.classList.remove("is-cropping");
-			if (cropBox) cropBox.hidden = true;
-			applyVideoCrop(video, manualCrop);
 			invalidateReferenceAnalysis();
-			status.textContent = "Encuadre seleccionado. Analiza el tramo para guardar esta área.";
+			renderStoredCropBox();
+			status.textContent = "Área lista. Puedes moverla o ajustar cada borde; después analiza el tramo.";
 		};
 		const editCrop = () => {
 			if (!fileInput?.files?.[0]) {
@@ -1440,16 +1588,21 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 			};
 			cropping = true;
 			cropStart = undefined;
+			cropOrigin = undefined;
+			cropInteraction = undefined;
 			applyVideoCrop(video);
 			video.style.objectFit = "contain";
 			motionInput?.classList.add("is-cropping");
 			renderStoredCropBox();
-			status.textContent = "Arrastra sobre el video para seleccionar el área que se utilizará.";
+			status.textContent = manualCrop ? "Mueve el área completa o arrastra cualquiera de sus cuatro bordes." : "Arrastra sobre el video para crear el área que se utilizará.";
 		};
 		const resetCrop = () => {
 			if (!fileInput?.files?.[0]) return;
 			manualCrop = undefined;
 			cropping = false;
+			cropStart = undefined;
+			cropOrigin = undefined;
+			cropInteraction = undefined;
 			motionInput?.classList.remove("is-cropping");
 			if (cropBox) cropBox.hidden = true;
 			applyVideoCrop(video);
@@ -1550,7 +1703,7 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				const result = await detectFrame(source, crop);
 				if (overlay) {
 					overlay.hidden = false;
-					drawHolisticOverlay(overlay, crop ? (source.videoWidth || 640) * crop.width : source.videoWidth || 640, crop ? (source.videoHeight || 480) * crop.height : source.videoHeight || 480, result, activity.features);
+					drawHolisticOverlay(overlay, crop ? (source.videoWidth || 640) * crop.width : source.videoWidth || 640, crop ? (source.videoHeight || 480) * crop.height : source.videoHeight || 480, result, activity.features, crop ? "cover" : "contain");
 				};
 				frames.push(featureFrame(result, elapsed, activity.features));
 				landmarkFrames.push(replayLandmarkFrame(result, source, elapsed, crop));
@@ -1654,7 +1807,10 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 						sourceSegment: undefined,
 						storedClip: false,
 						storedClipDurationMs: undefined,
-						stages: runtimeHelpers.suggestMotionStages(activity.reference.template.frames)
+						stages: runtimeHelpers.suggestMotionStages(activity.reference.template.frames).map((stage) => ({
+							...stage,
+							scored: stage.scored !== false
+						}))
 					};
 				} else if (activity.reference.type === "url") {
 					if (activity.reference.url.toLowerCase().endsWith(".json")) {
@@ -1667,8 +1823,8 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				};
 				if (referenceVideo && previewVideoUrl) {
 					referenceVideo.src = previewVideoUrl;
-					applyVideoCrop(referenceVideo, previewTemplate?.storedClip ? undefined : previewTemplate?.sourceCrop);
 					referenceVideo.hidden = false;
+					syncReferencePresentation();
 				};
 				if (!previewTemplate?.landmarkFrames.length) {
 					referencePreviewStatus.textContent = previewVideoUrl ? "Video de referencia listo. Esta fuente no incluye puntos guardados." : "La práctica no tiene una reproducción visual guardada.";
@@ -1680,8 +1836,9 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 					return;
 				};
 				const firstFrame = previewTemplate.landmarkFrames[0];
+				syncReferencePresentation();
 				referencePreview.hidden = false;
-				drawHolisticOverlay(referencePreview, firstFrame.width, firstFrame.height, firstFrame, activity.features);
+				drawReferenceFrame(firstFrame);
 				if (referenceEmpty) referenceEmpty.hidden = true;
 				if (referenceReplay) referenceReplay.disabled = false;
 				const segment = previewTemplate.sourceSegment ? ` · ${previewTemplate.sourceSegment.startSeconds.toFixed(1)}–${previewTemplate.sourceSegment.endSeconds.toFixed(1)} s` : "";
@@ -1735,7 +1892,7 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 					const delay = Math.max(0, Math.min(500, frame.t - previousTime));
 					if (delay) await new Promise((resolve) => runtimeWindow.setTimeout(resolve, delay));
 					if (generation !== referenceReplayGeneration) return;
-					drawHolisticOverlay(referencePreview, frame.width, frame.height, frame, activity.features);
+					drawReferenceFrame(frame);
 					previousTime = frame.t;
 				};
 				referenceVideo?.pause();
@@ -1874,7 +2031,8 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				const label = runtimeDocument.createElement("span");
 				label.textContent = stage.label;
 				const score = runtimeDocument.createElement("strong");
-				score.textContent = `${stage.score}%`;
+				score.textContent = stage.scored === false ? "No cuenta" : `${stage.score}%`;
+				if (stage.scored === false) item.classList.add("is-not-scored");
 				const replayStage = runtimeDocument.createElement("button");
 				replayStage.type = "button";
 				replayStage.textContent = "Reproducir esta etapa";
@@ -1902,6 +2060,10 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 			selectedVideoUrl = URL.createObjectURL(file);
 			manualCrop = undefined;
 			cropping = false;
+			cropStart = undefined;
+			cropDraft = undefined;
+			cropOrigin = undefined;
+			cropInteraction = undefined;
 			motionInput?.classList.remove("is-cropping");
 			if (cropBox) cropBox.hidden = true;
 			invalidateReferenceAnalysis();
@@ -1963,6 +2125,9 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 			};
 			cropping = false;
 			cropStart = undefined;
+			cropDraft = undefined;
+			cropOrigin = undefined;
+			cropInteraction = undefined;
 			motionInput?.classList.remove("is-cropping");
 			if (cropBox) cropBox.hidden = true;
 			replayGeneration += 1;
@@ -2087,20 +2252,28 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 				};
 				const comparison = runtimeHelpers.compareMotionSequences(reference, preparedInput);
 				const stageComparisons = runtimeHelpers.compareMotionStages(reference, preparedInput, referenceData.stages);
+				const scoredStageComparisons = stageComparisons.filter((stage) => stage.scored !== false);
+				if (scoredStageComparisons.length) {
+					for (const component of Object.keys(comparison.scores)) {
+						comparison.scores[component] = Math.round(scoredStageComparisons.reduce((total, stage) => total + stage.scores[component], 0) / scoredStageComparisons.length);
+					};
+					comparison.overallScore = Math.round(scoredStageComparisons.reduce((total, stage) => total + stage.score, 0) / scoredStageComparisons.length);
+				};
 				if (!satisfiesRequiredHand(preparedInput, referenceData.requiredHand)) {
 					const previousHandScore = comparison.scores.handShape;
 					comparison.scores.handShape = 0;
 					comparison.overallScore = Math.min(activity.passingScore - 1, Math.max(0, Math.round(comparison.overallScore - previousHandScore * .27)));
 					comparison.feedback = requiredHandFeedback(referenceData.requiredHand);
 				};
-				overall.textContent = `${comparison.overallScore}% de coincidencia`;
+				overall.textContent = `${comparison.overallScore}%`;
+				overall.setAttribute("aria-label", `${comparison.overallScore}% de coincidencia`);
 				scores.replaceChildren(...Object.entries(comparison.scores).map(([component, score]) => {
 					const item = runtimeDocument.createElement("div");
 					item.className = "motion-results__score";
 					item.innerHTML = `<small>${scoreLabel(component)}</small><strong>${score}%</strong>`;
 					return item;
 				}));
-				const weakestStage = stageComparisons.slice().sort((left, right) => left.score - right.score)[0];
+				const weakestStage = scoredStageComparisons.slice().sort((left, right) => left.score - right.score)[0];
 				feedback.textContent = weakestStage && weakestStage.score < 75 ? `${comparison.feedback} Revisa especialmente: ${weakestStage.label}.` : comparison.feedback;
 				renderStageComparisons(stageComparisons);
 				results.hidden = false;
@@ -2179,9 +2352,11 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 		motionInput?.addEventListener("pointerdown", beginCrop);
 		motionInput?.addEventListener("pointermove", updateCrop);
 		motionInput?.addEventListener("pointerup", finishCrop);
+		motionInput?.addEventListener("pointercancel", finishCrop);
 		storedTemplateField?.addEventListener("input", loadExistingTemplate);
 		requiredHandSelect?.addEventListener("change", updateRequiredHand);
 		video.addEventListener("timeupdate", updateTimelinePlayhead);
+		referenceVideo?.addEventListener("loadedmetadata", syncReferencePresentation);
 		void loadReferencePreview();
 		if (activity.mode === "reference") setReferenceSourceMode(referenceSourceMode);
 		loadExistingTemplate();
@@ -2203,9 +2378,12 @@ const compareMotionStages = function compareMotionStages(reference, learner, sta
 			motionInput?.removeEventListener("pointerdown", beginCrop);
 			motionInput?.removeEventListener("pointermove", updateCrop);
 			motionInput?.removeEventListener("pointerup", finishCrop);
+			motionInput?.removeEventListener("pointercancel", finishCrop);
 			storedTemplateField?.removeEventListener("input", loadExistingTemplate);
 			requiredHandSelect?.removeEventListener("change", updateRequiredHand);
 			video.removeEventListener("timeupdate", updateTimelinePlayhead);
+			referenceVideo?.removeEventListener("loadedmetadata", syncReferencePresentation);
+			referenceResizeObserver?.disconnect();
 			stopStream();
 			referenceVideo?.pause();
 			if (selectedVideoUrl) URL.revokeObjectURL(selectedVideoUrl);

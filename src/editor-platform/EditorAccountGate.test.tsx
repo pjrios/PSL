@@ -60,4 +60,14 @@ describe('EditorAccountGate', () => {
       password: 'password123',
     }))
   })
+
+  it('opens a browser-local guest project without authentication', async () => {
+    render(<EditorAccountGate>{(account) => <div>{account.isGuest ? account.project.name : 'Cuenta'}</div>}</EditorAccountGate>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Continuar como invitado' }))
+
+    expect(screen.getByText('Proyecto de invitado')).toBeInTheDocument()
+    expect(signInWithPassword).not.toHaveBeenCalled()
+    expect(signUp).not.toHaveBeenCalled()
+  })
 })

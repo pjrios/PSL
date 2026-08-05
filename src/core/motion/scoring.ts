@@ -59,6 +59,7 @@ export interface MotionStageDefinition {
   id: string
   label: string
   progress: number
+  scored?: boolean
 }
 
 export interface MotionStageComparison extends MotionStageDefinition {
@@ -71,7 +72,7 @@ export interface MotionStageComparison extends MotionStageDefinition {
 
 export function suggestMotionStages(frames: MotionFeatureFrame[]): MotionStageDefinition[] {
   if (!frames.length) return []
-  if (frames.length === 1) return [{ id: 'start', label: 'Inicio', progress: 0 }]
+  if (frames.length === 1) return [{ id: 'start', label: 'Inicio', progress: 0, scored: false }]
 
   const cumulative = [0]
   for (let index = 1; index < frames.length; index += 1) {
@@ -94,9 +95,9 @@ export function suggestMotionStages(frames: MotionFeatureFrame[]): MotionStageDe
   })
 
   return [
-    { id: 'start', label: 'Inicio', progress: 0 },
+    { id: 'start', label: 'Inicio', progress: 0, scored: false },
     ...keyStages,
-    { id: 'end', label: 'Final', progress: 1 },
+    { id: 'end', label: 'Final', progress: 1, scored: false },
   ]
 }
 

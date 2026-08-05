@@ -7,6 +7,7 @@ import {
   MOTION_CAPTURE_REFERENCE_BLOCK_ID,
   MOTION_COMPARE_BLOCK_ID,
   MOTION_VIEW_REFERENCE_BLOCK_ID,
+  motionComponentStyles,
   readMotionActivities,
   upgradeMotionActivity,
 } from './motion-analysis'
@@ -48,6 +49,11 @@ describe('motion editor contract', () => {
       .not.toBeNull()
     expect(documentWith(motionAnalysisMarkup('reference-capture')).querySelector('[data-motion-activity]')
       ?.getAttribute('data-motion-mode')).toBe('reference')
+    expect(motionComponentStyles).toContain('[data-motion-component-type="reference-view"] .motion-input')
+    expect(motionComponentStyles).toContain('object-fit:contain')
+    expect(motionComponentStyles).toContain('aspect-ratio:4/3')
+    expect(motionComponentStyles).toContain('.motion-input video{object-fit:cover')
+    expect(motionComponentStyles).not.toContain('min-height:clamp(15rem,42vw,28rem)')
 
     editor.destroy()
     container.remove()
@@ -134,6 +140,21 @@ describe('motion editor contract', () => {
     expect(component.toHTML()).toContain('data-motion-reference-replay')
     expect(component.toHTML()).toContain('data-motion-start')
     expect(component.toHTML()).toContain('hidden')
+
+    editor.destroy()
+    container.remove()
+  })
+
+  it('removes a fixed height from existing reference viewers while retaining other styles', () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const editor = grapesjs.init({ container, headless: true })
+    editor.setComponents(motionAnalysisMarkup('reference-view'))
+    const component = editor.getWrapper()!.components().at(0)!
+    component.setStyle({ height: '1100px', width: '90%', 'margin-left': '5vw' })
+
+    expect(upgradeMotionActivity(component)).toBe(true)
+    expect(component.getStyle()).toMatchObject({ height: 'auto', width: '90%', 'margin-left': '5vw' })
 
     editor.destroy()
     container.remove()

@@ -18,6 +18,8 @@ describe('editor canvas layout guards', () => {
     expect(editorDocument.head.querySelector('style[data-psl-editor-layout-guards]')?.textContent)
       .toContain('--psl-editor-data-card-height: 320px')
     expect(editorDocument.head.querySelector('style[data-psl-editor-layout-guards]')?.textContent)
+      .toContain('min-height: var(--psl-editor-viewport-height) !important')
+    expect(editorDocument.head.querySelector('style[data-psl-editor-layout-guards]')?.textContent)
       .toContain('.psl-data-grid')
     expect(editorDocument.head.querySelector('style[data-psl-editor-layout-guards]')?.textContent)
       .toContain('.lsp-page')

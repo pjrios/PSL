@@ -5,7 +5,7 @@
     "styles": [
       {
         "selectors": [
-          "#iukw9b"
+          "#i35esl"
         ],
         "style": {
           "width": "84%"
@@ -13,7 +13,7 @@
       },
       {
         "selectors": [
-          "#ivlzof"
+          "#i2mkbd"
         ],
         "style": {
           "width": "78%"
@@ -21,7 +21,7 @@
       },
       {
         "selectors": [
-          "#izucur"
+          "#in9evl"
         ],
         "style": {
           "width": "86%"
@@ -29,7 +29,7 @@
       },
       {
         "selectors": [
-          "#i20p6m"
+          "#ilskvu"
         ],
         "style": {
           "width": "80%"
@@ -41,8 +41,12 @@
         ],
         "style": {
           "display": "grid",
+          "align-content": "start",
           "gap": "1rem",
           "width": "100%",
+          "height": "auto !important",
+          "min-width": "0px",
+          "max-width": "100%",
           "color": "rgb(23, 33, 31)",
           "background-image": "linear-gradient(145deg, rgb(255, 255, 255), rgb(245, 248, 247))",
           "background-position": "0% 0%",
@@ -131,7 +135,11 @@
           "display": "grid",
           "place-items": "center",
           "overflow": "hidden",
-          "min-height": "clamp(15rem,42vw,28rem)",
+          "width": "100%",
+          "height": "auto !important",
+          "min-height": "0px",
+          "max-height": "none",
+          "aspect-ratio": "4/3",
           "color": "white",
           "background-image": "radial-gradient(circle at 50% 42%, rgb(36, 58, 54) 0, rgb(23, 37, 33) 42%, rgb(17, 26, 24) 100%)",
           "background-position": "0% 0%",
@@ -180,7 +188,16 @@
         "selectors": [],
         "selectorsAdd": ".motion-input video",
         "style": {
-          "object-fit": "cover"
+          "object-fit": "cover",
+          "background-image": "none",
+          "background-position": "0% 0%",
+          "background-size": "auto",
+          "background-repeat": "repeat",
+          "background-origin": "padding-box",
+          "background-clip": "border-box",
+          "background-attachment": "scroll",
+          "background-color": "rgb(16, 34, 31)",
+          "background": "rgb(16, 34, 31)"
         }
       },
       {
@@ -191,6 +208,57 @@
         }
       },
       {
+        "selectors": [],
+        "selectorsAdd": ".motion-activity[data-motion-component-type=\"reference-view\"]",
+        "style": {
+          "height": "auto !important",
+          "min-width": "0px",
+          "max-width": "100%",
+          "align-content": "start"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-activity[data-motion-component-type=\"reference-view\"] .motion-input",
+        "style": {
+          "width": "100%",
+          "min-height": "0px",
+          "max-height": "none",
+          "aspect-ratio": "16/9"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-activity[data-motion-component-type=\"reference-view\"] .motion-input video",
+        "style": {
+          "object-fit": "contain",
+          "background-image": "none",
+          "background-position": "0% 0%",
+          "background-size": "auto",
+          "background-repeat": "repeat",
+          "background-origin": "padding-box",
+          "background-clip": "border-box",
+          "background-attachment": "scroll",
+          "background-color": "rgb(16, 34, 31)",
+          "background": "rgb(16, 34, 31)"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-activity[data-motion-component-type=\"reference-view\"] .motion-controls",
+        "style": {
+          "align-items": "center"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-activity[data-motion-component-type=\"reference-view\"] [data-motion-reference-status]",
+        "style": {
+          "min-width": "0px",
+          "overflow-wrap": "anywhere"
+        }
+      },
+      {
         "selectors": [
           "motion-crop-box"
         ],
@@ -198,7 +266,8 @@
           "position": "absolute",
           "z-index": "3",
           "display": "block",
-          "pointer-events": "none",
+          "pointer-events": "auto",
+          "touch-action": "none",
           "border": "3px solid rgb(255, 209, 102)",
           "border-width": "3px",
           "border-style": "solid",
@@ -230,7 +299,8 @@
           "background-color": "rgba(255, 209, 102, 0.12)",
           "background": "rgba(255, 209, 102, 0.12)",
           "box-shadow": "0 0 0 9999px rgba(4,18,16,.48)",
-          "border-radius": "0.35rem"
+          "border-radius": "0.35rem",
+          "cursor": "move"
         }
       },
       {
@@ -239,6 +309,117 @@
         "style": {
           "display": "none"
         }
+      },
+      {
+        "selectors": [
+          "motion-crop-handle"
+        ],
+        "style": {
+          "position": "absolute",
+          "z-index": "1",
+          "margin-top": "0px",
+          "margin-right": "0px",
+          "margin-bottom": "0px",
+          "margin-left": "0px",
+          "margin": "0px",
+          "padding-top": "0px",
+          "padding-right": "0px",
+          "padding-bottom": "0px",
+          "padding-left": "0px",
+          "padding": "0px",
+          "background-image": "none",
+          "background-position": "0% 0%",
+          "background-size": "auto",
+          "background-repeat": "repeat",
+          "background-origin": "padding-box",
+          "background-clip": "border-box",
+          "background-attachment": "scroll",
+          "background-color": "rgb(255, 255, 255)",
+          "background": "rgb(255, 255, 255)",
+          "border": "2px solid rgb(23, 111, 105)",
+          "border-width": "2px",
+          "border-style": "solid",
+          "border-color": "rgb(23, 111, 105)",
+          "border-top": "2px solid rgb(23, 111, 105)",
+          "border-top-width": "2px",
+          "border-top-style": "solid",
+          "border-top-color": "rgb(23, 111, 105)",
+          "border-right": "2px solid rgb(23, 111, 105)",
+          "border-right-width": "2px",
+          "border-right-style": "solid",
+          "border-right-color": "rgb(23, 111, 105)",
+          "border-bottom": "2px solid rgb(23, 111, 105)",
+          "border-bottom-width": "2px",
+          "border-bottom-style": "solid",
+          "border-bottom-color": "rgb(23, 111, 105)",
+          "border-left": "2px solid rgb(23, 111, 105)",
+          "border-left-width": "2px",
+          "border-left-style": "solid",
+          "border-left-color": "rgb(23, 111, 105)",
+          "border-image": "none",
+          "border-radius": "999px",
+          "box-shadow": "0 1px 4px rgba(0,0,0,.28)"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-crop-handle[data-motion-crop-handle=\"top\"], .motion-crop-handle[data-motion-crop-handle=\"bottom\"]",
+        "style": {
+          "left": "50%",
+          "width": "2.5rem",
+          "height": "0.75rem",
+          "transform": "translateX(-50%)",
+          "cursor": "ns-resize"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-crop-handle[data-motion-crop-handle=\"top\"]",
+        "style": {
+          "top": "-0.45rem"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-crop-handle[data-motion-crop-handle=\"bottom\"]",
+        "style": {
+          "bottom": "-0.45rem"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-crop-handle[data-motion-crop-handle=\"left\"], .motion-crop-handle[data-motion-crop-handle=\"right\"]",
+        "style": {
+          "top": "50%",
+          "width": "0.75rem",
+          "height": "2.5rem",
+          "transform": "translateY(-50%)",
+          "cursor": "ew-resize"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-crop-handle[data-motion-crop-handle=\"left\"]",
+        "style": {
+          "left": "-0.45rem"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-crop-handle[data-motion-crop-handle=\"right\"]",
+        "style": {
+          "right": "-0.45rem"
+        }
+      },
+      {
+        "selectors": [
+          "motion-crop-handle"
+        ],
+        "style": {
+          "outline": "3px solid #fff",
+          "outline-offset": "2px"
+        },
+        "state": "focus-visible"
       },
       {
         "selectors": [
@@ -4052,7 +4233,16 @@
         "selectors": [],
         "selectorsAdd": ".reference-stage video",
         "style": {
-          "object-fit": "cover"
+          "object-fit": "contain",
+          "background-image": "none",
+          "background-position": "0% 0%",
+          "background-size": "auto",
+          "background-repeat": "repeat",
+          "background-origin": "padding-box",
+          "background-clip": "border-box",
+          "background-attachment": "scroll",
+          "background-color": "rgb(16, 34, 31)",
+          "background": "rgb(16, 34, 31)"
         }
       },
       {
@@ -4287,7 +4477,7 @@
           "padding": "18px",
           "display": "grid",
           "grid-template-columns": "minmax(150px,.7fr) minmax(0,2fr) minmax(220px,1fr)",
-          "align-items": "center",
+          "align-items": "stretch",
           "gap": "14px",
           "background-image": "none",
           "background-position": "0% 0%",
@@ -4313,20 +4503,37 @@
         "selectors": [],
         "selectorsAdd": ".comparison-results-dock .motion-results__overall",
         "style": {
-          "line-height": "1.08"
+          "min-width": "0px",
+          "align-self": "center",
+          "line-height": "1"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".comparison-results-dock .motion-results__overall::after",
+        "style": {
+          "content": "\"de coincidencia\"",
+          "display": "block",
+          "margin-top": "5px",
+          "color": "var(--muted)",
+          "font-size": "13px",
+          "font-weight": "700",
+          "line-height": "1.2"
         }
       },
       {
         "selectors": [],
         "selectorsAdd": ".comparison-results-dock .motion-results__scores",
         "style": {
-          "grid-template-columns": "repeat(3,minmax(105px,1fr))"
+          "min-width": "0px",
+          "grid-template-columns": "repeat(3,minmax(0,1fr))"
         }
       },
       {
         "selectors": [],
         "selectorsAdd": ".comparison-results-dock .motion-results__score",
         "style": {
+          "min-width": "0px",
           "padding-top": "10px",
           "padding-right": "10px",
           "padding-bottom": "10px",
@@ -4347,9 +4554,11 @@
         "selectors": [],
         "selectorsAdd": ".comparison-results-dock .motion-results__feedback",
         "style": {
+          "min-width": "0px",
           "height": "100%",
           "display": "flex",
-          "align-items": "center"
+          "align-items": "center",
+          "overflow-wrap": "anywhere"
         }
       },
       {
@@ -5862,6 +6071,16 @@
         }
       },
       {
+        "selectors": [],
+        "selectorsAdd": ".movement-reference-required .motion-controls",
+        "style": {
+          "border-top": "0px",
+          "border-top-width": "0px",
+          "border-top-style": "none",
+          "border-top-color": "currentcolor"
+        }
+      },
+      {
         "selectors": [
           "motion-stage-editor"
         ],
@@ -6361,6 +6580,78 @@
         }
       },
       {
+        "selectors": [
+          "motion-stage-marker",
+          "is-not-scored"
+        ],
+        "style": {
+          "opacity": "0.58"
+        }
+      },
+      {
+        "selectors": [
+          "motion-stage-inspector"
+        ],
+        "style": {
+          "grid-template-columns": "minmax(150px,1fr) auto auto auto"
+        }
+      },
+      {
+        "selectors": [
+          "motion-stage-score-toggle"
+        ],
+        "style": {
+          "display": "flex !important",
+          "align-items": "center",
+          "gap": "6px",
+          "white-space": "nowrap",
+          "font-size": "11px !important",
+          "font-weight": "700 !important"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-stage-score-toggle[hidden]",
+        "style": {
+          "display": "none !important"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-stage-score-toggle input",
+        "style": {
+          "width": "17px",
+          "height": "17px",
+          "min-height": "17px !important",
+          "accent-color": "var(--primary)"
+        }
+      },
+      {
+        "selectors": [
+          "motion-stage-result",
+          "is-not-scored"
+        ],
+        "style": {
+          "color": "var(--muted)",
+          "background-image": "none",
+          "background-position": "0% 0%",
+          "background-size": "auto",
+          "background-repeat": "repeat",
+          "background-origin": "padding-box",
+          "background-clip": "border-box",
+          "background-attachment": "scroll",
+          "background-color": "rgb(243, 246, 245)",
+          "background": "rgb(243, 246, 245)"
+        }
+      },
+      {
+        "selectors": [],
+        "selectorsAdd": ".motion-stage-result.is-not-scored strong",
+        "style": {
+          "font-size": "12px"
+        }
+      },
+      {
         "selectors": [],
         "selectorsAdd": ".movement-reference-required .motion-stage-editor:not([hidden])",
         "style": {
@@ -6433,7 +6724,7 @@
         "selectors": [],
         "selectorsAdd": ".movement-reference-required .motion-stage-inspector",
         "style": {
-          "grid-template-columns": "minmax(140px,1fr) auto auto",
+          "grid-template-columns": "minmax(140px,1fr) auto auto auto",
           "align-items": "center",
           "gap": "8px",
           "padding-top": "0px",
@@ -7336,18 +7627,19 @@
         "selectors": [],
         "selectorsAdd": ".comparison-results-dock .motion-results",
         "style": {
-          "grid-template-columns": "1fr 2fr"
+          "grid-template-columns": "minmax(150px,.55fr) minmax(0,2fr)"
         },
-        "mediaText": "(max-width:900px)",
+        "mediaText": "(max-width:1100px)",
         "atRuleType": "media"
       },
       {
         "selectors": [],
         "selectorsAdd": ".comparison-results-dock .motion-results__feedback",
         "style": {
-          "grid-column": "1/-1"
+          "grid-column": "1/-1",
+          "height": "auto"
         },
-        "mediaText": "(max-width:900px)",
+        "mediaText": "(max-width:1100px)",
         "atRuleType": "media"
       },
       {
@@ -9381,7 +9673,7 @@
                 "tagName": "html"
               }
             },
-            "id": "sE20G8jgwUVBoAME"
+            "id": "KfWHMgDAcc9rnn5k"
           }
         ],
         "id": "bienvenida"
@@ -9919,7 +10211,7 @@
                 "tagName": "html"
               }
             },
-            "id": "FADQASAedmcsKjnK"
+            "id": "5ddx0Vu42HztKmEA"
           }
         ],
         "id": "inicio"
@@ -10358,7 +10650,7 @@
                 "tagName": "html"
               }
             },
-            "id": "wjRhmdY5X1AtCJVk"
+            "id": "zlOvXAjlzIJla397"
           }
         ],
         "id": "catalogo"
@@ -11039,8 +11331,54 @@
                                           "attributes": {
                                             "data-motion-crop-box": "",
                                             "hidden": true,
-                                            "aria-hidden": "true"
-                                          }
+                                            "aria-label": "Área seleccionada. Arrástrala para moverla."
+                                          },
+                                          "components": [
+                                            {
+                                              "tagName": "button",
+                                              "classes": [
+                                                "motion-crop-handle"
+                                              ],
+                                              "attributes": {
+                                                "data-motion-crop-handle": "top",
+                                                "type": "button",
+                                                "aria-label": "Ajustar borde superior"
+                                              }
+                                            },
+                                            {
+                                              "tagName": "button",
+                                              "classes": [
+                                                "motion-crop-handle"
+                                              ],
+                                              "attributes": {
+                                                "data-motion-crop-handle": "right",
+                                                "type": "button",
+                                                "aria-label": "Ajustar borde derecho"
+                                              }
+                                            },
+                                            {
+                                              "tagName": "button",
+                                              "classes": [
+                                                "motion-crop-handle"
+                                              ],
+                                              "attributes": {
+                                                "data-motion-crop-handle": "bottom",
+                                                "type": "button",
+                                                "aria-label": "Ajustar borde inferior"
+                                              }
+                                            },
+                                            {
+                                              "tagName": "button",
+                                              "classes": [
+                                                "motion-crop-handle"
+                                              ],
+                                              "attributes": {
+                                                "data-motion-crop-handle": "left",
+                                                "type": "button",
+                                                "aria-label": "Ajustar borde izquierdo"
+                                              }
+                                            }
+                                          ]
                                         },
                                         {
                                           "classes": [
@@ -11498,7 +11836,7 @@
                 "tagName": "html"
               }
             },
-            "id": "LsG87z4bm6TmVXbs"
+            "id": "91LvbfsEbpxwZctQ"
           }
         ],
         "id": "detalle"
@@ -11848,7 +12186,7 @@
                                     {
                                       "tagName": "span",
                                       "attributes": {
-                                        "id": "iukw9b"
+                                        "id": "i35esl"
                                       }
                                     }
                                   ]
@@ -11900,7 +12238,7 @@
                                     {
                                       "tagName": "span",
                                       "attributes": {
-                                        "id": "ivlzof"
+                                        "id": "i2mkbd"
                                       }
                                     }
                                   ]
@@ -11952,7 +12290,7 @@
                                     {
                                       "tagName": "span",
                                       "attributes": {
-                                        "id": "izucur"
+                                        "id": "in9evl"
                                       }
                                     }
                                   ]
@@ -12004,7 +12342,7 @@
                                     {
                                       "tagName": "span",
                                       "attributes": {
-                                        "id": "i20p6m"
+                                        "id": "ilskvu"
                                       }
                                     }
                                   ]
@@ -12144,7 +12482,7 @@
                 "tagName": "html"
               }
             },
-            "id": "5vnUSfEIyU52dwKN"
+            "id": "JI3QN6TTRK623ykP"
           }
         ],
         "id": "resultados"
@@ -12772,7 +13110,7 @@
                 "tagName": "html"
               }
             },
-            "id": "cTA0cWouGOvUnirO"
+            "id": "fqXg0TBNophRqgo9"
           }
         ],
         "id": "progreso"
@@ -13215,7 +13553,7 @@
                 "tagName": "html"
               }
             },
-            "id": "rcLVciTVJNpkMhCN"
+            "id": "xNclfqpTUpLj3ed6"
           }
         ],
         "id": "perfil"
@@ -13619,7 +13957,7 @@
                 "tagName": "html"
               }
             },
-            "id": "VPIGEQPn3SI5D75u"
+            "id": "irf2bnBqLHl8soNu"
           }
         ],
         "id": "gestion"
@@ -14342,8 +14680,54 @@
                                               "attributes": {
                                                 "data-motion-crop-box": "",
                                                 "hidden": true,
-                                                "aria-hidden": "true"
-                                              }
+                                                "aria-label": "Área seleccionada. Arrástrala para moverla."
+                                              },
+                                              "components": [
+                                                {
+                                                  "tagName": "button",
+                                                  "classes": [
+                                                    "motion-crop-handle"
+                                                  ],
+                                                  "attributes": {
+                                                    "data-motion-crop-handle": "top",
+                                                    "type": "button",
+                                                    "aria-label": "Ajustar borde superior"
+                                                  }
+                                                },
+                                                {
+                                                  "tagName": "button",
+                                                  "classes": [
+                                                    "motion-crop-handle"
+                                                  ],
+                                                  "attributes": {
+                                                    "data-motion-crop-handle": "right",
+                                                    "type": "button",
+                                                    "aria-label": "Ajustar borde derecho"
+                                                  }
+                                                },
+                                                {
+                                                  "tagName": "button",
+                                                  "classes": [
+                                                    "motion-crop-handle"
+                                                  ],
+                                                  "attributes": {
+                                                    "data-motion-crop-handle": "bottom",
+                                                    "type": "button",
+                                                    "aria-label": "Ajustar borde inferior"
+                                                  }
+                                                },
+                                                {
+                                                  "tagName": "button",
+                                                  "classes": [
+                                                    "motion-crop-handle"
+                                                  ],
+                                                  "attributes": {
+                                                    "data-motion-crop-handle": "left",
+                                                    "type": "button",
+                                                    "aria-label": "Ajustar borde izquierdo"
+                                                  }
+                                                }
+                                              ]
                                             },
                                             {
                                               "classes": [
@@ -15016,7 +15400,7 @@
                 "tagName": "html"
               }
             },
-            "id": "xUs1bq0vZ0MiCEk2"
+            "id": "O4aGiPITxIqAwMz9"
           }
         ],
         "id": "editor-practica"
